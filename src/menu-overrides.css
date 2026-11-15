@@ -22,3 +22,139 @@
   background: #e9dda9;
   image-rendering: pixelated;
 }
+
+@media (max-width: 600px) {
+  html,
+  body,
+  #root {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .topbar {
+    padding: 0 10px;
+  }
+
+  .brand {
+    font-size: 16px;
+  }
+
+  .arena-page {
+    padding: 8px 6px 12px;
+  }
+
+  .arena-page .game-layout,
+  .arena-page .arena-wrap,
+  .arena-page .arena {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .arena-page .iso-arena {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 660 / 1000;
+  }
+
+  .arena-page .bottom-panel {
+    width: 100%;
+    padding: 10px 7px;
+    gap: 9px;
+    overflow: hidden;
+  }
+
+  .arena-page .hype {
+    gap: 7px;
+  }
+
+  .arena-page .hype-label {
+    font-size: 11px;
+  }
+
+  .arena-page .hype-label b {
+    font-size: 16px;
+  }
+
+  .arena-page .hand {
+    display: flex;
+    justify-content: flex-start;
+    gap: 7px;
+    width: 100%;
+    min-width: 0;
+    padding: 3px 2px 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+  }
+
+  .arena-page .card {
+    flex: 0 0 104px;
+    width: 104px;
+    height: 136px;
+    min-width: 104px;
+    scroll-snap-align: start;
+  }
+
+  .arena-page .card .card-art {
+    height: 58px !important;
+  }
+
+  .arena-page .card>b {
+    display: block;
+    overflow: hidden;
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .arena-page .card small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .arena-page .panel-actions {
+    min-height: 38px;
+  }
+
+  .arena-page .next-card-preview {
+    max-width: calc(100% - 88px);
+  }
+
+  .arena-page .match-overlay {
+    padding: 18px 10px;
+  }
+
+  .arena-page .match-overlay h2 {
+    max-width: 100%;
+    font-size: 30px;
+    text-align: center;
+  }
+
+  .invite-qr {
+    width: 150px;
+    height: 150px;
+  }
+
+  .menu-page {
+    padding: 34px 18px 24px;
+  }
+
+  .menu-page h1 {
+    font-size: clamp(52px, 16vw, 68px);
+  }
+
+  .menu-page > p {
+    max-width: 30em;
+    font-size: 14px;
+  }
+
+  .menu-facts {
+    gap: 10px 18px;
+  }
+}
