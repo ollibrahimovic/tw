@@ -45,24 +45,50 @@
     padding: 8px 6px 12px;
   }
 
-  .arena-page .game-layout,
+  .app-shell.in-arena .arena-page {
+    height: 100vh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .arena-page .game-layout {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    height: calc(100% - 158px);
+    min-height: 0;
+  }
+
   .arena-page .arena-wrap,
   .arena-page .arena {
+    flex: 1 1 auto;
+    height: 100% !important;
+    min-height: 0;
     width: 100%;
     max-width: 100%;
   }
 
   .arena-page .iso-arena {
     width: 100%;
-    height: auto;
-    aspect-ratio: 660 / 1000;
+    height: 100%;
+    aspect-ratio: auto;
   }
 
   .arena-page .bottom-panel {
+    flex: 0 0 158px;
+    min-height: 158px;
+    height: 158px;
     width: 100%;
     padding: 10px 7px;
     gap: 9px;
     overflow: hidden;
+  }
+
+  .arena-page .arena-topline,
+  .arena-page .arena-bottomline,
+  .arena-page .arena-legend,
+  .arena-page footer {
+    display: none;
   }
 
   .arena-page .hype {
@@ -78,35 +104,33 @@
   }
 
   .arena-page .hand {
-    display: flex;
-    justify-content: flex-start;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    justify-content: initial;
     gap: 7px;
     width: 100%;
     min-width: 0;
     padding: 3px 2px 8px;
-    overflow-x: auto;
+    overflow: visible;
     overflow-y: hidden;
-    overscroll-behavior-x: contain;
-    scroll-snap-type: x proximity;
-    scrollbar-width: thin;
   }
 
   .arena-page .card {
-    flex: 0 0 104px;
-    width: 104px;
-    height: 136px;
-    min-width: 104px;
-    scroll-snap-align: start;
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    aspect-ratio: 1 / 1;
+    padding: 4px !important;
   }
 
   .arena-page .card .card-art {
-    height: 58px !important;
+    height: 38px !important;
   }
 
   .arena-page .card>b {
     display: block;
     overflow: hidden;
-    font-size: 10px;
+    font-size: 7px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -116,6 +140,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-size: 6px;
   }
 
   .arena-page .panel-actions {
