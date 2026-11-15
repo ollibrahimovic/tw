@@ -12,7 +12,6 @@ services:
     runtime: static
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
-    plan: free
     envVars:
       - key: VITE_MULTIPLAYER_URL
         value: wss://terrace-wars-multiplayer.onrender.com
