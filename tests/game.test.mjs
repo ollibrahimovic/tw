@@ -237,6 +237,24 @@ test('clubhouse gatling activates only after an own pub falls and rockets damage
   }
 })
 
+test('pub guards fire when an enemy has crossed the bridge', () => {
+  for (const side of ['blue', 'red']) {
+    const bridgeSide = side === 'blue' ? { x: 4, y: 17 } : { x: 4, y: 14 }
+    const p = fromTile(bridgeSide)
+    let g = deploy(fresh(), 0, p.x, p.y, side)
+    g.aiClock = 10000
+    Object.assign(g.units[0], {
+      side: side === 'blue' ? 'red' : 'blue',
+      x: p.x,
+      y: p.y,
+      hp: 1000,
+      card: { ...cards[0], speed: 0, damage: 0 },
+    })
+    g = tick(g, .05)
+    assert.ok(g.flares.some(flare => flare.source === `${side}PubOne`), `${side} pub should fire across the bridge`)
+  }
+})
+
 test('troops pursue enemies outside weapon range before attacking buildings, then resume their lane', () => {
   let g = deploy(fresh(), 0, 30, 31)
   g.aiClock = 10000
@@ -335,6 +353,7 @@ test('smoke bomb heavily slows and lightly damages enemy troops', () => {
 test('beer flies before damaging a unit, leaves a puddle and expires without repeated damage', () => {
   let g = deploy(fresh(), 2, 30, 45)
   g.aiClock = 10000
+  for (const key of ['bluePubOne', 'bluePubTwo', 'redPubOne', 'redPubTwo']) g.buildingCooldown[key] = 100
   g.units.push({ ...g.units[0], id: 900, side: 'red', x: 35, cooldown: 100, card: { ...cards[0], speed: 0 }, hp: 430 })
   g = tick(g, .05)
   assert.equal(g.beers.length, 1)
@@ -374,6 +393,7 @@ test('beer also impacts buildings and safely lands if a unit target disappears',
 test('pyro throws before impact, applies enemy-only splash and leaves temporary ground fire', () => {
   let g = deploy(newGame([7, 0, 1, 2, 3, 4, 5, 6]), 0, 30, 45)
   g.aiClock = 10000
+  for (const key of ['bluePubOne', 'bluePubTwo', 'redPubOne', 'redPubTwo']) g.buildingCooldown[key] = 100
   const stationary = { ...g.units[0], cooldown: 100, hp: 1000, card: { ...cards[0], speed: 0 } }
   g.units.push({ ...stationary, id: 900, side: 'red', x: 38, y: 45 })
   g.units.push({ ...stationary, id: 901, side: 'red', x: 39, y: 47 })

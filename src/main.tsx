@@ -71,6 +71,24 @@ function App() {
   const blueScore = Number(buildingHp.redPubOne <= 0) + Number(buildingHp.redPubTwo <= 0)
   const redScore = Number(buildingHp.bluePubOne <= 0) + Number(buildingHp.bluePubTwo <= 0)
 
+  useEffect(() => {
+    const endCardDrag = (event: PointerEvent) => {
+      if (!draggingCard) return
+      const target = event.target as HTMLElement | null
+      const insideArena = target?.closest('.arena')
+      if (event.type === 'pointercancel' || !insideArena) {
+        dragged.current = null
+        setDraggingCard(false)
+      }
+    }
+    window.addEventListener('pointerup', endCardDrag)
+    window.addEventListener('pointercancel', endCardDrag)
+    return () => {
+      window.removeEventListener('pointerup', endCardDrag)
+      window.removeEventListener('pointercancel', endCardDrag)
+    }
+  }, [draggingCard])
+
   function beep(frequency = 180) {
     if (!sound || !audio.current) return
     const ctx = audio.current
@@ -366,7 +384,8 @@ function App() {
        const selectedInDeck = deck.indexOf(id)
        return <article className={`collection-card ${rarityClass(card)} ${selectedInDeck >= 0 ? 'deck-selected' : ''}`} key={id}>{cardArt(card)}<span className={`rarity ${rarityClass(card)}`}>{card.rarity} · {card.cost} Hype</span><h2>{card.name}</h2><p>{card.role}</p><div className="card-stats">{card.hp} HP · {card.damage} Schaden<br />{card.kind === 'building' ? 'Gebäude' : `${card.rate}s Angriff · Tempo ${card.speed}`}</div><button className="secondary" onClick={() => toggleDeck(id)}>{selectedInDeck >= 0 ? `${selectedInDeck + 1} · Entfernen` : '＋ Hinzufügen'}</button>{selectedInDeck >= 0 && <button className="secondary deck-reorder" onClick={() => reorder(selectedInDeck)}>Nach vorne ↑</button>}</article>
       })}</div><button className="primary" disabled={deck.length !== 8} onClick={start}>{onlineMode === 'join' ? 'DERBY BEITRETEN' : onlineMode === 'create' ? 'EINLADUNG ERSTELLEN' : 'MIT DIESEM DECK SPIELEN'} <Play size={18} /></button></section>}
-    {page === 'arena' && <section className={`page arena-page ${game.result ? 'showing-result' : ''}`}>
+     {page === 'arena' && <section className={`page arena-page ${game.result ? 'showing-result' : ''}`}>
+        <div className="mobile-match-timer" aria-label="Verbleibende Spielzeit">{Math.floor(time / 60).toString().padStart(2, '0')}:{(time % 60).toString().padStart(2, '0')}</div>
        <div className="heading-row"><div><div className="eyebrow"><span className="live-dot" /> TRAINING · GEGEN KI</div><h1>Riverside Derby</h1><p>One pitch. Two firms. Only one winner.</p></div><div className="match-meta"><div><span>{time <= 60 ? 'FINALE PHASE' : 'HEIMSPIEL'}</span><strong>{time <= 60 ? '2× HYPE' : 'RIVERSIDE'}</strong></div><div className={`timer ${time <= 30 ? 'urgent' : ''}`}>{Math.floor(time / 60).toString().padStart(2, '0')}:{(time % 60).toString().padStart(2, '0')}</div><button className="icon-button" disabled={!!game.result || countdown !== null} onClick={() => setRunning(v => !v)} aria-label={running ? 'Pausieren' : 'Fortsetzen'}>{running ? <Pause size={18} /> : <Play size={18} />}</button></div></div>
        <div className={`game-layout ${game.result ? 'has-result' : ''}`}>
         <aside className="sidebar left-sidebar"><div className="player-card blue-player"><div className="player-id"><div className="crest blue-crest">R</div><div><b>Deine Firm</b><small>FC Riverside</small></div></div><div className="score">{blueScore}</div></div><div className="stat-card"><div className="stat-title">DEIN CLUBHAUS <Heart size={14} /></div><div className="health-value">{Math.ceil(buildingHp.blueFortress)} <small>/ 3.000 HP</small></div><div className="health-bar"><i style={{ width: `${buildingHp.blueFortress / 30}%` }} /></div><div className="stat-foot"><Shield size={13} /> Heimvorteil</div></div><div className="tip-card"><Zap size={17} /><div><b>Dein Spielzug</b><p>Karte wählen und links platzieren. Oder direkt auf das Feld ziehen. Tasten 1–4 wählen Karten, Leertaste pausiert.</p></div></div></aside>
@@ -411,7 +430,7 @@ function App() {
         <aside className="sidebar right-sidebar"><div className="player-card red-player"><div className="score">{redScore}</div><div className="player-id"><div className="crest red-crest">K</div><div><b>KiezKalle <span className="cpu-badge">KI</span></b><small>Auswärtsblock</small></div></div></div><div className="stat-card"><div className="stat-title">RIVALEN-CLUBHAUS <Heart size={14} /></div><div className="health-value">{Math.ceil(buildingHp.redFortress)} <small>/ 3.000 HP</small></div><div className="health-bar red-health"><i style={{ width: `${buildingHp.redFortress / 30}%` }} /></div></div><div className="combat-log"><div className="stat-title">LIVE-TICKER <Swords size={14} /></div>{game.log.map((entry, i) => <p key={i}>{entry}</p>)}</div></aside>
       </div>
        <div className="bottom-panel"><div className="hype"><div className="hype-label"><Flame size={17} /> HYPE <b>{hype.toFixed(1)}</b><span>/ 10</span></div><div className="hype-bar"><i style={{ width: `${hypePercent}%` }} /></div><small>+{time <= 60 ? '0,95' : '0,48'} / Sekunde</small></div>
-          <div className="hand">{myQueue.slice(0, 4).map((id, index) => { const card = cards[id]; return <button title={`${card.name} · ${card.role} · ${card.cost} Hype · ${card.damage} Schaden · ${card.hp} HP`} draggable={false} onPointerDown={e => { e.preventDefault(); dragged.current = index; setSelected(index); setDraggingCard(true) }} onPointerUp={() => { dragged.current = null; setDraggingCard(false) }} onPointerCancel={() => { dragged.current = null; setDraggingCard(false) }} className={`card ${rarityClass(card)} ${selected === index ? 'selected' : ''} ${hype < card.cost ? 'disabled' : ''}`} key={id} onClick={() => { setSelected(index); setDraggingCard(false) }} aria-label={`${card.name}, ${card.rarity}, ${card.cost} Hype`} aria-pressed={selected === index}><span className="card-cost">{card.cost}</span><span className={`card-rarity ${rarityClass(card)}`}>{card.rarity}</span>{cardArt(card)}<b>{card.name}</b><small>{card.role}</small><div className="card-power"><span>DMG {card.damage}</span><span>HP {card.hp}</span></div></button> })}</div>
+          <div className="hand">{myQueue.slice(0, 4).map((id, index) => { const card = cards[id]; return <button title={`${card.name} · ${card.role} · ${card.cost} Hype`} draggable={false} onPointerDown={e => { e.preventDefault(); dragged.current = index; setSelected(index); setDraggingCard(true) }} className={`card ${rarityClass(card)} ${selected === index ? 'selected' : ''} ${hype < card.cost ? 'disabled' : ''}`} key={id} onClick={() => { setSelected(index); setDraggingCard(false) }} aria-label={`${card.name}, ${card.cost} Hype`} aria-pressed={selected === index}><span className="card-cost">{card.cost}</span>{cardArt(card)}<b>{card.name}</b><small>{card.role}</small></button> })}</div>
          <div className="panel-actions"><div className="next-card-preview" title={`Nächste Karte: ${nextCard.name}`}><div className="next-card-art">{cardArt(nextCard)}</div><div><small>NÄCHSTE KARTE</small><b>{nextCard.icon} {nextCard.name}</b></div></div><button className="surrender" disabled={!!game.result} onClick={() => { setGame(g => ({ ...g, result: 'AUFGEGEBEN' })); setRunning(false) }}><RotateCcw size={15} /> Aufgeben</button></div>
       </div><footer><span><Trophy size={13} /> Zerstöre das Clubhaus oder führe nach 3 Minuten bei zerstörten Außenposten.</span><span>v0.2 · TRAINING MVP</span></footer>
       {message && <div className="toast" role="status">{message}</div>}

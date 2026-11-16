@@ -15,7 +15,10 @@ export const FLARE_INTERVAL = 1.5
 export const GATLING_INTERVAL = .6
 export const GATLING_ATTACK_RANGE = 40
 export const FLARE_DAMAGE = 45
-export const PUB_ATTACK_RANGE = 20
+// Pub guards should open fire as soon as an enemy clears the bridge.
+// The bridge-to-pub distance is about 25 renderer units, with a small
+// margin so units cannot slip past the lane entrance before the first shot.
+export const PUB_ATTACK_RANGE = 28
 export const MOVEMENT_SPEED_FACTOR = .92
 export const UNIT_ALERT_RADIUS = 24
 export const UNIT_PURSUIT_RADIUS = 32
@@ -388,7 +391,12 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
       }
     } else {
       const route = laneRoute(u.side, u.lane)
-      const rawWaypoint = target ? pursuitWaypoint(u, target) : structureTarget ? structureTarget : route[u.routeIndex]
+      let routeIndex = u.routeIndex
+      if (!pointTarget) {
+        while (routeIndex < route.length - 1 &&
+          (u.side === 'blue' ? u.x > route[routeIndex].x + 1 : u.x < route[routeIndex].x - 1)) routeIndex++
+      }
+      const rawWaypoint = target ? pursuitWaypoint(u, target) : structureTarget ? structureTarget : route[routeIndex]
       const routeWaypoint = target ? rawWaypoint : { x: rawWaypoint.x, y: rawWaypoint.y + (u.lateralOffset ?? 0) }
       const solids = solidBuildings(g)
       resolveBuildings(u, solids)
@@ -413,7 +421,10 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
          u.moving = movement > .001
           if (u.moving) u.facingBack = u.side === 'blue' ? dx > .08 : dx < -.08
        }
-        if (!pointTarget && distance(u, routeWaypoint) < .0001 && u.routeIndex < route.length - 1) u.routeIndex++
+        if (!pointTarget && distance(u, routeWaypoint) < .0001) {
+          if (routeIndex > u.routeIndex) u.routeIndex = routeIndex
+          else if (u.routeIndex < route.length - 1) u.routeIndex++
+        }
     }
   }
   separateUnits(g.units)

@@ -72,6 +72,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
         const sprites = new Map<string, PhaserType.GameObjects.Image>()
         const usedSprites = new Set<string>()
         const bars = this.add.graphics().setDepth(10)
+        const atmosphere = this.add.graphics().setDepth(.25)
         const showArt = (id: string, key: string, p: Point, character: boolean, alpha = 1, depth = 1) => {
           if (!this.textures.exists(key)) return false
           usedSprites.add(id)
@@ -85,28 +86,53 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
             .setScale(character ? .32 : .28).setAlpha(alpha).setDepth(depth)
           return true
         }
-        const healthBar = (p: Point, hp: number, max: number, side: Side, width = 24) => {
+        const healthBar = (p: Point, hp: number, max: number, side: Side, width = 24, yOffset = 17) => {
           if (hp <= 0) return
-          bars.fillStyle(DARK, .9).fillRect(p.x - width / 2, p.y + 17, width, 3)
+          bars.fillStyle(DARK, .9).fillRect(p.x - width / 2, p.y + yOffset, width, 3)
           bars.fillStyle(side === 'blue' ? BLUE : RED, 1)
-            .fillRect(p.x - width / 2, p.y + 17, width * Math.max(0, Math.min(1, hp / max)), 3)
+            .fillRect(p.x - width / 2, p.y + yOffset, width * Math.max(0, Math.min(1, hp / max)), 3)
         }
-        const label = this.add.text(0, 0, '', {
-          color: '#dfe7b0',
-          fontFamily: 'DM Sans, sans-serif',
-          fontSize: '12px',
-        }).setDepth(20)
         let hover: Point | null = null
         let pointerDown = false
         let animationClock = 0
         let lastState = gameRef.current
         let stateAge = 0
+        const drawAtmosphere = () => {
+          const m = metrics()
+          atmosphere.clear()
+
+          // Slow cloud banks keep the pitch alive without obscuring gameplay.
+          for (let i = 0; i < 5; i++) {
+            const drift = (animationClock * (.004 + i * .0007) + i * 180) % (m.pitchWidth + 180) - 90
+            const x = m.left + drift
+            const y = m.top + 34 + (i % 3) * 42
+            const scale = 1 + (i % 2) * .25
+            atmosphere.fillStyle(i % 2 ? 0xd6dfc0 : 0xb9c9b0, .045)
+            atmosphere.fillEllipse(x, y, 130 * scale, 24 * scale)
+            atmosphere.fillEllipse(x - 34 * scale, y + 3, 72 * scale, 18 * scale)
+            atmosphere.fillEllipse(x + 38 * scale, y + 2, 86 * scale, 20 * scale)
+          }
+
+          // Dust, ash and a few diagonal rain glints create movement in the air.
+          for (let i = 0; i < 30; i++) {
+            const x = m.left + ((i * 97 + animationClock * (2 + i % 3)) % m.pitchWidth)
+            const y = m.top + ((i * 53 + animationClock * (1 + i % 2)) % m.pitchHeight)
+            atmosphere.fillStyle(i % 5 === 0 ? 0xe6d99c : 0xd1d8b6, i % 5 === 0 ? .2 : .1)
+            atmosphere.fillCircle(x, y, i % 5 === 0 ? 1.4 : .8)
+          }
+          for (let i = 0; i < 9; i++) {
+            const x = m.left + ((i * 151 + animationClock * 1.8) % m.pitchWidth)
+            const y = m.top + 70 + ((i * 83) % Math.max(1, m.pitchHeight - 90))
+            atmosphere.lineStyle(1, 0xb8c9bb, .11)
+            atmosphere.lineBetween(x, y, x - 4, y + 12)
+          }
+        }
 
         const metrics = () => {
           const width = this.scale.width
           const height = this.scale.height
           const left = Math.max(18, width * .08)
-          const top = Math.min(100, height * .18)
+          const top = Math.min(100, height * (width < 600 ? .06 : .18))
           return { width, height, left, top, pitchWidth: width - left * 2, pitchHeight: height - top - 28 }
         }
 
@@ -126,6 +152,16 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           const depth = 100 - (pointer.y - m.top) / m.pitchHeight * 100
           return snapToTile({ x: perspectiveRef.current === 'red' ? 100 - depth : depth, y: lane })
         }
+        const fromClientPointer = (event: PointerEvent): Point | null => {
+          const canvas = this.game.canvas
+          const rect = canvas.getBoundingClientRect()
+          if (event.clientX < rect.left || event.clientX > rect.right ||
+            event.clientY < rect.top || event.clientY > rect.bottom) return null
+          return fromPointer({
+            x: (event.clientX - rect.left) * this.scale.width / rect.width,
+            y: (event.clientY - rect.top) * this.scale.height / rect.height,
+          } as Phaser.Input.Pointer)
+        }
 
         const line = (a: Point, b: Point, color: number, width: number, alpha = 1) => {
           graphics.lineStyle(width, color, alpha)
@@ -144,10 +180,42 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           const m = metrics()
           graphics.fillStyle(0x111a14, 1)
           graphics.fillRect(0, 0, m.width, m.height)
-          graphics.fillStyle(0x465b3d, 1)
-          graphics.fillRoundedRect(m.left, m.top, m.pitchWidth, m.pitchHeight, 8)
-          graphics.lineStyle(2, CREAM, .7)
-          graphics.strokeRoundedRect(m.left, m.top, m.pitchWidth, m.pitchHeight, 8)
+           graphics.fillStyle(0x465b3d, 1)
+           graphics.fillRoundedRect(m.left, m.top, m.pitchWidth, m.pitchHeight, 8)
+
+           // Worn, muddy terrace ground: fixed positions keep the texture
+           // stable while the arena is redrawn every frame.
+           for (let i = 0; i < 42; i++) {
+             const px = m.left + 10 + ((i * 79) % 997) / 997 * (m.pitchWidth - 20)
+             const py = m.top + 12 + ((i * 137) % 991) / 991 * (m.pitchHeight - 24)
+             const width = 12 + (i % 5) * 8
+             const height = 4 + (i % 4) * 2
+             const muddy = i % 4 === 0
+             graphics.fillStyle(muddy ? 0x493f2d : i % 3 === 0 ? 0x75815a : 0x273829, muddy ? .24 : .16)
+             graphics.fillEllipse(px, py, width, height)
+             if (muddy) {
+               graphics.fillStyle(0x8d7950, .1)
+               graphics.fillEllipse(px + 5, py - 1, width * .55, height * .7)
+             }
+           }
+           for (let i = 0; i < 34; i++) {
+             const px = m.left + 8 + ((i * 173) % 983) / 983 * (m.pitchWidth - 16)
+             const py = m.top + 10 + ((i * 59) % 977) / 977 * (m.pitchHeight - 20)
+             const radius = 1.2 + (i % 3) * .8
+             graphics.fillStyle(i % 2 ? 0xaaa17d : 0x5b604d, .38)
+             graphics.fillCircle(px, py, radius)
+             graphics.fillStyle(0xd1c89c, .16)
+             graphics.fillCircle(px - radius * .35, py - radius * .35, radius * .35)
+           }
+           for (let i = 0; i < 22; i++) {
+             const px = m.left + 14 + ((i * 211) % 971) / 971 * (m.pitchWidth - 28)
+             const py = m.top + 18 + ((i * 97) % 967) / 967 * (m.pitchHeight - 36)
+             graphics.lineStyle(1.2, i % 2 ? 0x8b9a68 : 0x202e25, .28)
+             graphics.lineBetween(px, py, px + (i % 3 - 1) * 5, py - 5 - (i % 3) * 2)
+             graphics.lineBetween(px + 2, py, px + 5, py - 4)
+           }
+           graphics.lineStyle(2, CREAM, .7)
+           graphics.strokeRoundedRect(m.left, m.top, m.pitchWidth, m.pitchHeight, 8)
 
           for (let i = 1; i < 12; i++) {
             const y = m.top + m.pitchHeight * i / 12
@@ -421,7 +489,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           if (showArt(ghost ? 'preview' : `unit-${unit.id}`,
             `fan-${index}-${unit.side}-${back}-${pose}`, p, true, ghost ? .48 : 1,
             ghost ? 9 : 1 + p.y / this.scale.height)) {
-            if (!ghost) healthBar(p, unit.hp, unit.card.hp, unit.side)
+            if (!ghost) healthBar(p, unit.hp, unit.card.hp, unit.side, 24, -48)
             return
           }
           const color = unit.side === 'blue' ? BLUE : RED
@@ -439,7 +507,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           }
           graphics.fillStyle(DARK, .8)
           const barWidth = unit.card.name === 'Der Ultra' ? 24 : 20
-          const barY = unit.card.name === 'Der Ultra' ? 17 : 20
+           const barY = unit.card.name === 'Der Ultra' ? -48 : -22
           graphics.fillRect(p.x - barWidth / 2, p.y + barY, barWidth, 3)
           graphics.fillStyle(color, ghost ? .5 : 1)
           graphics.fillRect(p.x - barWidth / 2, p.y + barY, barWidth * Math.max(0, unit.hp / unit.card.hp), 3)
@@ -506,7 +574,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           if (!activeRef.current) return
           const target = fromPointer(pointer)
           if (canDeploy(gameRef.current, selectedRef.current, target.x, target.y, perspectiveRef.current)) {
-            onPlaceRef.current(target.x, target.y, false)
+            onPlaceRef.current(target.x, target.y, draggingRef.current)
           }
           pointerDown = false
           hover = null
@@ -517,11 +585,39 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
             hover = null
           }
         })
+        const handleCardDragMove = (event: PointerEvent) => {
+          if (!draggingRef.current) return
+          const target = fromClientPointer(event)
+          if (!target) {
+            hover = null
+            return
+          }
+          pointerDown = true
+          hover = target
+        }
+        const handleCardDragEnd = (event: PointerEvent) => {
+          if (!draggingRef.current || !pointerDown) return
+          const target = fromClientPointer(event)
+          if (target && activeRef.current && canDeploy(gameRef.current, selectedRef.current, target.x, target.y, perspectiveRef.current)) {
+            onPlaceRef.current(target.x, target.y, true)
+          }
+          pointerDown = false
+          hover = null
+        }
+        window.addEventListener('pointermove', handleCardDragMove)
+        window.addEventListener('pointerup', handleCardDragEnd)
+        window.addEventListener('pointercancel', handleCardDragEnd)
+        scene.events.once('destroy', () => {
+          window.removeEventListener('pointermove', handleCardDragMove)
+          window.removeEventListener('pointerup', handleCardDragEnd)
+          window.removeEventListener('pointercancel', handleCardDragEnd)
+        })
 
         scene.renderArena = () => {
           usedSprites.clear()
           bars.clear()
           graphics.clear()
+          drawAtmosphere()
           drawPitch()
           for (const building of buildings) drawBuilding(building)
           for (const structure of gameRef.current.structures) {
@@ -540,7 +636,6 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
               sprites.delete(id)
             }
           }
-          label.setPosition(10, 8).setText(`PHASER · ${gameRef.current.units.length} Einheiten · ${gameRef.current.time.toFixed(1)}s`)
         }
         this.events.on(Phaser.Scenes.Events.UPDATE, (_time: number, delta: number) => {
           if (lastState !== gameRef.current) {
