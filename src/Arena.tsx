@@ -147,9 +147,14 @@ export function Fanmarsch({ side = 'blue', moving = false }: { side?: Side; movi
         <path d="M-9-34Q0-43 9-34" fill="#252c28" />
       </g>)}
     </g>
+    <g className="fanmarsch-torch" transform="translate(-23 -20) rotate(-12)">
+      <path d="M0 4 3-29" stroke="#4d3f35" strokeWidth="4" />
+      <path d="M1-2 3-29" stroke="#d3b590" strokeWidth="2.5" />
+      <g transform="translate(3 -31) scale(.7)"><PyroFlame /></g>
+    </g>
     <path d="M22-65V13" fill="none" stroke="#b9a66f" strokeWidth="2.5" />
-    <path d="M24-63Q45-58 54-45L24-36Z" fill={team} stroke="#1d2924" strokeWidth="2" />
-    <path d="M27-57 45-49 28-43" fill="none" stroke="#e2d49c" strokeWidth="2" opacity=".8" />
+    <path d="M24-63H56V-37H24Z" fill={team} stroke="#1d2924" strokeWidth="2" />
+    <path d="M29-57H50V-43H29Z" fill="none" stroke="#e2d49c" strokeWidth="2" opacity=".8" />
   </g>
 }
 

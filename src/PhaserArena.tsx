@@ -3,7 +3,7 @@ import type PhaserType from 'phaser'
 import { buildings, canDeploy, cards } from './game'
 import type { Card, Game, Side } from './game'
 import { createArenaEffects } from './phaserEffects'
-import { fromTile, snapToTile, validTile } from './grid.ts'
+import { fromTile, snapToTile, snapBuildingToTile, validTile } from './grid.ts'
 
 type PhaserArenaProps = {
   game: Game
@@ -126,6 +126,19 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
             atmosphere.lineStyle(1, 0xb8c9bb, .11)
             atmosphere.lineBetween(x, y, x - 4, y + 12)
           }
+          const confettiColors = [0xe7c95d, 0xd96b4f, 0x72b9a4, 0xb487d1, 0xe9e0b0]
+          for (let i = 0; i < 14; i++) {
+            const cycle = (animationClock * .00022 + i * .137) % 1
+            if (cycle > .62) continue
+            const flight = cycle / .62
+            const x = m.left - 12 + flight * (m.pitchWidth + 24) + Math.sin(animationClock * .004 + i) * 7
+            const y = m.top + 20 + ((i * 71) % Math.max(1, m.pitchHeight - 70)) +
+              Math.sin(flight * Math.PI * 2 + i) * 18 + flight * flight * 28
+            const length = 3 + (i % 3)
+            atmosphere.fillStyle(confettiColors[i % confettiColors.length], .7)
+            atmosphere.fillRect(x, y, length, 1.8)
+            if (i % 2 === 0) atmosphere.fillRect(x + length * .4, y - 2, 1.8, 4)
+          }
         }
 
         const metrics = () => {
@@ -150,7 +163,8 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           const m = metrics()
           const lane = (pointer.x - m.left) / m.pitchWidth * 100
           const depth = 100 - (pointer.y - m.top) / m.pitchHeight * 100
-          return snapToTile({ x: perspectiveRef.current === 'red' ? 100 - depth : depth, y: lane })
+          const point = { x: perspectiveRef.current === 'red' ? 100 - depth : depth, y: lane }
+          return selectedRef.current.kind === 'building' ? snapBuildingToTile(point) : snapToTile(point)
         }
         const fromClientPointer = (event: PointerEvent): Point | null => {
           const canvas = this.game.canvas
@@ -244,11 +258,33 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
             const points = [{ x: 9.5, y: 28.5 }, { x, y: 25 }, { x, y: 18 },
               { x, y: 13 }, { x, y: 6 }, { x: 9.5, y: 2.5 }]
               .map(t => { const p = fromTile(t); return toScreen(p.x, p.y) })
-            line(points[0], points[1], 0x172018, 25, .95)
             for (let i = 1; i < points.length; i++) {
-              line(points[i - 1], points[i], 0x172018, 25, .95)
-              line(points[i - 1], points[i], lane === 0 ? 0x849d77 : 0x907964, 18, .9)
-              line(points[i - 1], points[i], 0xd0c18e, 1.2, .8)
+              const a = points[i - 1]
+              const b = points[i]
+              const dx = b.x - a.x
+              const dy = b.y - a.y
+              const length = Math.hypot(dx, dy) || 1
+              const nx = -dy / length
+              const ny = dx / length
+              const pieces = 8
+              for (let j = 0; j < pieces; j++) {
+                const t0 = j / pieces
+                const t1 = (j + 1) / pieces
+                const wobble0 = Math.sin((i * 11 + j * 1.7 + lane) * 1.8) * 5
+                const wobble1 = Math.sin((i * 11 + (j + 1) * 1.7 + lane) * 1.8) * 5
+                const from = { x: a.x + dx * t0 + nx * wobble0, y: a.y + dy * t0 + ny * wobble0 }
+                const to = { x: a.x + dx * t1 + nx * wobble1, y: a.y + dy * t1 + ny * wobble1 }
+                line(from, to, 0x303326, 23 + (j % 2), .62)
+                line(from, to, lane === 0 ? 0x655d45 : 0x6b5747, 18 + (j % 2), .7)
+                line(from, to, j % 2 ? 0x948762 : 0x817858, 1.2, .2)
+              }
+              for (const puddleT of [.28, .72]) {
+                const wobble = Math.sin((i * 7 + puddleT * 9 + lane) * 1.4) * 4
+                const px = a.x + dx * puddleT + nx * wobble
+                const py = a.y + dy * puddleT + ny * wobble
+                graphics.fillStyle(0x334344, .18)
+                graphics.fillEllipse(px, py, 10 + ((i + lane) % 3) * 4, 3 + ((i + lane) % 2) * 1.5)
+              }
             }
           }
 
@@ -262,9 +298,28 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           ]
           for (const [from, to] of fenceSegments) {
             line({ x: from, y: fenceY }, { x: to, y: fenceY }, 0x101610, 10, .95)
-            line({ x: from, y: fenceY - 5 }, { x: to, y: fenceY - 5 }, 0x87947b, 2, .85)
-            line({ x: from, y: fenceY + 5 }, { x: to, y: fenceY + 5 }, 0x596b59, 2, .85)
-            for (let x = from + 14; x < to; x += 22) line({ x, y: fenceY - 12 }, { x, y: fenceY + 12 }, 0x4c5b4b, 4, .9)
+            // Galvanized mesh: two crossing diagonal wire rows over the
+            // darker rail, with visible horizontal tension wires.
+            line({ x: from, y: fenceY - 8 }, { x: to, y: fenceY - 8 }, 0x9aa188, 1.3, .75)
+            line({ x: from, y: fenceY }, { x: to, y: fenceY }, 0x6f7c6d, 1, .75)
+            line({ x: from, y: fenceY + 8 }, { x: to, y: fenceY + 8 }, 0x596b59, 1.3, .8)
+            for (let x = from - 14; x < to + 14; x += 12) {
+              line({ x, y: fenceY - 9 }, { x: x + 18, y: fenceY + 9 }, 0x87947b, 1, .58)
+              line({ x: x + 18, y: fenceY - 9 }, { x, y: fenceY + 9 }, 0x303d32, 1, .62)
+            }
+            for (let x = from + 14; x < to; x += 22) {
+              line({ x, y: fenceY - 13 }, { x, y: fenceY + 13 }, 0x4c5b4b, 4, .95)
+              line({ x: x - 2, y: fenceY - 13 }, { x: x + 2, y: fenceY - 13 }, 0xb0ad88, 1, .7)
+            }
+            // Two strands of barbed wire above the mesh.
+            line({ x: from, y: fenceY - 15 }, { x: to, y: fenceY - 15 }, 0x202a22, 2.2, .95)
+            line({ x: from, y: fenceY - 19 }, { x: to, y: fenceY - 19 }, 0x78816d, 1.4, .85)
+            for (let x = from + 18; x < to - 4; x += 28) {
+              line({ x: x - 5, y: fenceY - 18 }, { x, y: fenceY - 24 }, 0xb5aa7b, 1.4, .9)
+              line({ x, y: fenceY - 24 }, { x: x + 5, y: fenceY - 18 }, 0xb5aa7b, 1.4, .9)
+              line({ x: x - 4, y: fenceY - 14 }, { x, y: fenceY - 20 }, 0x8f8665, 1, .8)
+              line({ x, y: fenceY - 20 }, { x: x + 4, y: fenceY - 14 }, 0x8f8665, 1, .8)
+            }
           }
           for (const opening of openings) {
             graphics.fillStyle(0x8e7047, 1)
@@ -548,10 +603,12 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           const m = metrics()
           const tileWidth = m.pitchWidth / 18
           const tileHeight = m.pitchHeight / 32
+          const footprintWidth = selectedRef.current.kind === 'building' ? tileWidth * 2 : tileWidth
+          const footprintHeight = selectedRef.current.kind === 'building' ? tileHeight * 2 : tileHeight
           graphics.fillStyle(allowed ? 0x82f4c0 : 0xef6354, .22)
-          graphics.fillRect(p.x - tileWidth / 2, p.y - tileHeight / 2, tileWidth, tileHeight)
+          graphics.fillRect(p.x - footprintWidth / 2, p.y - footprintHeight / 2, footprintWidth, footprintHeight)
           graphics.lineStyle(2, allowed ? 0xdfffe8 : 0xff9b8e, .8)
-          graphics.strokeRect(p.x - tileWidth / 2, p.y - tileHeight / 2, tileWidth, tileHeight)
+          graphics.strokeRect(p.x - footprintWidth / 2, p.y - footprintHeight / 2, footprintWidth, footprintHeight)
           if (selectedRef.current.kind === 'building') {
             showArt('preview', `stall-${perspectiveRef.current}-${selectedRef.current.name === 'Würstchenbude' ? 'sausage' : 'beer'}-100`,
               p, false, .48, 9)

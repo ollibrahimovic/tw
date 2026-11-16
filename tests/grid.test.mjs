@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { fromTile, toTile, tileDistance, validTile, walkablePoint, TILE_BUILDINGS, insideRect } from '../src/grid.ts'
+import { fromTile, toTile, tileDistance, validTile, walkablePoint, TILE_BUILDINGS, insideRect, buildingRectAt } from '../src/grid.ts'
 import { newGame, deploy, canDeploy, cards, buildings, tick } from '../src/game.ts'
 
 test('arena contains exactly 556 symmetric tiles including partial end rows', () => {
@@ -68,4 +68,19 @@ test('end rows, occupied buildings and central barrier constrain deployment', ()
   }
   const pub = fromTile({ x: 4, y: 25 })
   assert.equal(canDeploy(g, cards[0], pub.x, pub.y), false)
+})
+
+test('buildings occupy a centered 2x2 footprint and cannot sit behind the clubhouses', () => {
+  const g = newGame([16])
+  const placement = fromTile({ x: 7.2, y: 20.1 })
+  assert.equal(canDeploy(g, cards[16], placement.x, placement.y), true)
+  const placed = deploy(g, 0, placement.x, placement.y)
+  const center = toTile(placed.structures[0])
+  assert.equal(center.x % 1, .5)
+  assert.equal(center.y % 1, .5)
+  assert.deepEqual(buildingRectAt(placed.structures[0]), {
+    left: center.x - .5, right: center.x + .5, top: center.y - .5, bottom: center.y + .5,
+  })
+  assert.equal(canDeploy(g, cards[16], fromTile({ x: 8, y: 30.8 }).x, fromTile({ x: 8, y: 30.8 }).y), false)
+  assert.equal(canDeploy({ ...g, hp: { ...g.hp, bluePubOne: 0, bluePubTwo: 0 } }, cards[16], fromTile({ x: 8, y: 30.8 }).x, fromTile({ x: 8, y: 30.8 }).y), false)
 })

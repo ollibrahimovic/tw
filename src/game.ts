@@ -1,5 +1,5 @@
 export type Card = { name: string; role: string; cost: number; icon: string; color: string; damage: number; hp: number; speed: number; range: number; rate: number; rarity: string; kind?: 'unit' | 'spell' | 'building'; hidden?: boolean }
-import { fromTile, toTile, snapToTile, validTile, walkablePoint, tileDistance, TILE_BUILDINGS, rectCenter, insideRect } from './grid.ts'
+import { fromTile, toTile, snapToTile, snapBuildingToTile, validTile, walkablePoint, tileDistance, TILE_BUILDINGS, rectCenter, insideRect, buildingRectAt } from './grid.ts'
 import type { TileRect } from './grid.ts'
 export type Side = 'blue' | 'red'
 export type Unit = { id: number; lane: number; x: number; y: number; side: Side; card: Card; hp: number; cooldown: number; routeIndex: number; targetId?: number; moving: boolean; facingBack: boolean; lateralOffset?: number; spawnDelay?: number }
@@ -88,7 +88,7 @@ function makeUnits(startId: number, x: number, y: number, side: Side, lane: numb
 const activeUnit = (unit: Unit) => unit.hp > 0 && (unit.spawnDelay ?? 0) <= 0
 export function canDeploy(g: Game, card: Card, x: number, y: number, side: Side = 'blue') {
   if (!card || !Number.isFinite(x) || !Number.isFinite(y)) return false
-  const snapped = snapToTile({ x, y })
+  const snapped = card.kind === 'building' ? snapBuildingToTile({ x, y }) : snapToTile({ x, y })
   const tile = toTile(snapped)
   if (!validTile(Math.round(tile.x), Math.round(tile.y))) return false
   x = snapped.x
@@ -98,7 +98,11 @@ export function canDeploy(g: Game, card: Card, x: number, y: number, side: Side 
   const clearance = card.kind === 'building' ? .5 : 0
   if (solidBuildings(g).some(b => insideRect(snapped, b.rect, clearance))) return false
   if (card.kind === 'building') {
-    if (![-.49, .49].every(dx => [-.49, .49].every(dy => walkablePoint(fromTile({ x: tile.x + dx, y: tile.y + dy }))))) return false
+    const cells = [-.5, .5].flatMap(dx => [-.5, .5].map(dy => ({ x: tile.x + dx, y: tile.y + dy })))
+    if (!cells.every(cell => validTile(Math.round(cell.x), Math.round(cell.y)) && walkablePoint(fromTile(cell)))) return false
+    // The two end rows are behind the respective clubhouses and are not
+    // buildable, even though they are valid deployment tiles for units.
+    if (side === 'blue' ? tile.y + .5 > 30.5 : tile.y - .5 < .5) return false
   }
   const enemy = side === 'blue' ? 'red' : 'blue'
   const pub = `${enemy}Pub${tile.x < 9.5 ? 'One' : 'Two'}` as BuildingKey
@@ -107,7 +111,8 @@ export function canDeploy(g: Game, card: Card, x: number, y: number, side: Side 
   return ownHalf || (card.kind !== 'building' && captured)
 }
 export function deploy(g: Game, slot: number, x: number, y: number, side: Side = 'blue'): Game {
-  const snapped = snapToTile({ x, y })
+  const queuedCard = cards[(side === 'blue' ? g.queue : g.redQueue)[slot]]
+  const snapped = queuedCard?.kind === 'building' ? snapBuildingToTile({ x, y }) : snapToTile({ x, y })
   x = snapped.x
   y = snapped.y
   const queueKey = side === 'blue' ? 'queue' : 'redQueue'
@@ -138,8 +143,7 @@ export function solidBuildings(g: Game): Solid[] {
       x: b.x, y: b.y, radius: b.key.includes('Fortress') ? 9 : 7, rect: TILE_BUILDINGS[b.key],
     })),
     ...g.structures.filter(s => s.hp > 0).map(s => {
-      const p = toTile(s)
-      return { x: s.x, y: s.y, radius: 3.5, rect: { left: p.x, right: p.x, top: p.y, bottom: p.y } }
+      return { x: s.x, y: s.y, radius: 3.5, rect: buildingRectAt(s) }
     }),
   ]
 }
