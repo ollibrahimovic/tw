@@ -119,20 +119,27 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
             line({ x: m.left, y }, { x: m.left + m.pitchWidth, y }, 0x17251b, 1, .22)
           }
 
-          const canalLeft = m.left + m.pitchWidth * .44
-          const canalWidth = m.pitchWidth * .12
-          graphics.fillStyle(0x1d3937, .95)
-          graphics.fillRect(canalLeft, m.top, canalWidth, m.pitchHeight)
-          for (const bridgeY of [.31, .66]) {
-            graphics.fillStyle(0x8e7047, 1)
-            graphics.fillRect(canalLeft - 8, m.top + m.pitchHeight * bridgeY - 12, canalWidth + 16, 24)
-            line(
-              { x: canalLeft - 8, y: m.top + m.pitchHeight * bridgeY - 12 },
-              { x: canalLeft + canalWidth + 8, y: m.top + m.pitchHeight * bridgeY + 12 },
-              0xd3b77d, 1, .7,
-            )
+          const fenceY = m.top + m.pitchHeight * .5
+          const openings = [22, 74].map(lane => m.left + m.pitchWidth * lane / 100)
+          const openingWidth = Math.max(34, m.pitchWidth * .1)
+          const fenceSegments: Array<[number, number]> = [
+            [m.left, openings[0] - openingWidth / 2],
+            [openings[0] + openingWidth / 2, openings[1] - openingWidth / 2],
+            [openings[1] + openingWidth / 2, m.left + m.pitchWidth],
+          ]
+          for (const [from, to] of fenceSegments) {
+            line({ x: from, y: fenceY }, { x: to, y: fenceY }, 0x101610, 10, .95)
+            line({ x: from, y: fenceY - 5 }, { x: to, y: fenceY - 5 }, 0x87947b, 2, .85)
+            line({ x: from, y: fenceY + 5 }, { x: to, y: fenceY + 5 }, 0x596b59, 2, .85)
+            for (let x = from + 14; x < to; x += 22) line({ x, y: fenceY - 12 }, { x, y: fenceY + 12 }, 0x4c5b4b, 4, .9)
           }
-          line({ x: canalLeft + canalWidth / 2, y: m.top }, { x: canalLeft + canalWidth / 2, y: m.top + m.pitchHeight }, 0x9bc0a3, 1, .3)
+          for (const opening of openings) {
+            graphics.fillStyle(0x8e7047, 1)
+            graphics.fillRect(opening - openingWidth / 2, fenceY - 10, openingWidth, 20)
+            for (let x = opening - openingWidth / 2 + 6; x < opening + openingWidth / 2; x += 10) {
+              line({ x, y: fenceY - 9 }, { x: x + 8, y: fenceY + 9 }, 0xd3b77d, 2, .75)
+            }
+          }
 
           for (const laneY of [13, 22, 74, 83]) {
             const start = toScreen(100, laneY)
@@ -147,25 +154,49 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
           if (hp <= 0) return
           const p = toScreen(building.x, building.y)
           const fortress = building.key.includes('Fortress')
-          const width = fortress ? 44 : 32
-          const height = fortress ? 32 : 25
+          const width = fortress ? 48 : 36
+          const height = fortress ? 34 : 28
           const color = building.side === 'blue' ? BLUE : RED
+          const roofY = p.y - height / 2 - 10
           polygon([
-            { x: p.x, y: p.y - height / 2 - 9 },
-            { x: p.x + width / 2, y: p.y - height / 2 },
-            { x: p.x, y: p.y - height / 2 + 9 },
+            { x: p.x, y: roofY - 9 },
+            { x: p.x + width / 2, y: roofY },
+            { x: p.x, y: roofY + 9 },
+            { x: p.x - width / 2, y: roofY },
+          ], 0x252f2c, .98)
+          polygon([
             { x: p.x - width / 2, y: p.y - height / 2 },
-          ], 0x303931, .98)
+            { x: p.x, y: p.y - height / 2 + 9 },
+            { x: p.x, y: p.y + height / 2 },
+            { x: p.x - width / 2, y: p.y + height / 2 - 9 },
+          ], 0x67665a, 1, 0x242d27)
+          polygon([
+            { x: p.x, y: p.y - height / 2 + 9 },
+            { x: p.x + width / 2, y: p.y - height / 2 },
+            { x: p.x + width / 2, y: p.y + height / 2 - 9 },
+            { x: p.x, y: p.y + height / 2 },
+          ], 0x414b43, 1, 0x242d27)
           graphics.fillStyle(color, 1)
-          graphics.fillRoundedRect(p.x - width / 2, p.y - height / 2, width, height, 4)
-          graphics.lineStyle(2, CREAM, .75)
-          graphics.strokeRoundedRect(p.x - width / 2, p.y - height / 2, width, height, 4)
+          graphics.fillRect(p.x - width / 2 + 3, p.y - 3, width - 6, 7)
+          graphics.lineStyle(1, 0x8a8d78, .45)
+          for (let i = -1; i <= 1; i++) line({ x: p.x - width / 2 + 5, y: p.y + i * 7 }, { x: p.x + width / 2 - 5, y: p.y + i * 7 }, 0x242d27, 1, .45)
+          graphics.fillStyle(0xc7a665, 1)
+          graphics.fillRect(p.x - width / 2 + 5, p.y - 3, 7, 9)
+          graphics.fillRect(p.x + width / 2 - 12, p.y - 4, 7, 10)
+          if (!fortress) {
+            graphics.fillStyle(building.side === 'blue' ? 0xd8c77e : 0xd08b50, 1)
+            graphics.fillRect(p.x - 13, p.y - height / 2 - 15, 26, 10)
+            graphics.fillStyle(DARK, .8)
+            graphics.fillRect(p.x - 9, p.y - height / 2 - 12, 18, 2)
+          }
           graphics.fillStyle(DARK, .8)
           graphics.fillRect(p.x - 18, p.y + height / 2 + 5, 36, 3)
           graphics.fillStyle(color, 1)
           graphics.fillRect(p.x - 18, p.y + height / 2 + 5, 36 * hp / building.max, 3)
+          graphics.lineStyle(1.5, 0xa8a794, .9)
+          line({ x: p.x, y: roofY - 8 }, { x: p.x, y: roofY - 29 }, 0xa8a794, 1.5, .9)
           graphics.fillStyle(color, 1)
-          graphics.fillTriangle(p.x, p.y - height / 2 - 12, p.x + 14, p.y - height / 2 - 7, p.x, p.y - height / 2 - 3)
+          graphics.fillTriangle(p.x, roofY - 29, p.x + 14, roofY - 24, p.x, roofY - 19)
         }
 
         const drawUnit = (unit: Game['units'][number], ghost = false) => {
