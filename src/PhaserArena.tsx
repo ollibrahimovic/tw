@@ -219,22 +219,105 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
           graphics.fillTriangle(p.x, roofY - 29, p.x + 14, roofY - 24, p.x, roofY - 19)
         }
 
+        const drawUltra = (unit: Game['units'][number], ghost = false) => {
+          const p = toScreen(unit.x, unit.y)
+          const team = unit.side === 'blue' ? BLUE : RED
+          const opacity = ghost ? .48 : 1
+          const skin = unit.side === 'blue' ? 0xc39170 : 0xa9795d
+          const jersey = 0x273134
+          const scarf = unit.side === 'blue' ? 0x5baaa0 : 0xc46249
+
+          // The Ultra is intentionally drawn as a chunky, readable game
+          // silhouette rather than another circular unit marker.
+          graphics.fillStyle(0x080d0c, .52 * opacity)
+          graphics.fillEllipse(p.x, p.y + 13, 31, 8)
+          polygon([
+            { x: p.x - 9, y: p.y + 5 },
+            { x: p.x - 4, y: p.y + 5 },
+            { x: p.x - 6, y: p.y + 16 },
+            { x: p.x - 13, y: p.y + 17 },
+            { x: p.x - 10, y: p.y + 12 },
+          ], 0x202626, opacity, DARK)
+          polygon([
+            { x: p.x + 3, y: p.y + 5 },
+            { x: p.x + 9, y: p.y + 4 },
+            { x: p.x + 13, y: p.y + 15 },
+            { x: p.x + 7, y: p.y + 17 },
+            { x: p.x + 1, y: p.y + 11 },
+          ], 0x202626, opacity, DARK)
+
+          // Shoulders, raised arms and clenched fists.
+          polygon([
+            { x: p.x - 10, y: p.y - 18 },
+            { x: p.x - 18, y: p.y - 12 },
+            { x: p.x - 21, y: p.y - 3 },
+            { x: p.x - 16, y: p.y - 1 },
+            { x: p.x - 10, y: p.y - 10 },
+          ], 0x343d3c, opacity, DARK)
+          polygon([
+            { x: p.x + 10, y: p.y - 18 },
+            { x: p.x + 18, y: p.y - 12 },
+            { x: p.x + 21, y: p.y - 3 },
+            { x: p.x + 16, y: p.y - 1 },
+            { x: p.x + 10, y: p.y - 10 },
+          ], 0x343d3c, opacity, DARK)
+          graphics.fillStyle(skin, opacity)
+          graphics.fillCircle(p.x - 19, p.y - 2, 4)
+          graphics.fillCircle(p.x + 19, p.y - 2, 4)
+
+          // Dark fan jacket with the team scarf across the chest.
+          polygon([
+            { x: p.x - 12, y: p.y - 19 },
+            { x: p.x - 7, y: p.y - 24 },
+            { x: p.x + 7, y: p.y - 24 },
+            { x: p.x + 12, y: p.y - 18 },
+            { x: p.x + 10, y: p.y + 6 },
+            { x: p.x, y: p.y + 10 },
+            { x: p.x - 11, y: p.y + 6 },
+          ], jersey, opacity, DARK)
+          graphics.fillStyle(scarf, opacity)
+          graphics.fillRect(p.x - 11, p.y - 13, 22, 6)
+          graphics.fillStyle(0xd0c18e, .8 * opacity)
+          graphics.fillRect(p.x - 8, p.y - 12, 3, 4)
+          graphics.fillRect(p.x + 5, p.y - 12, 3, 4)
+          line({ x: p.x - 7, y: p.y - 4 }, { x: p.x + 7, y: p.y - 4 }, 0x93958a, 1, .65 * opacity)
+          line({ x: p.x, y: p.y - 7 }, { x: p.x, y: p.y + 7 }, 0x93958a, 1, .55 * opacity)
+
+          // Hood/balaclava and the exposed eyes make the character readable
+          // even when several Ultras are deployed together.
+          graphics.fillStyle(0x182226, opacity)
+          graphics.fillCircle(p.x, p.y - 31, 13)
+          graphics.fillStyle(skin, opacity)
+          graphics.fillRoundedRect(p.x - 10, p.y - 32, 20, 9, 3)
+          graphics.fillStyle(DARK, opacity)
+          graphics.fillRect(p.x - 7, p.y - 30, 4, 2)
+          graphics.fillRect(p.x + 3, p.y - 30, 4, 2)
+          line({ x: p.x - 6, y: p.y - 25 }, { x: p.x + 6, y: p.y - 25 }, 0x070f12, 2.5, opacity)
+          line({ x: p.x - 8, y: p.y - 38 }, { x: p.x + 8, y: p.y - 38 }, scarf, 2, opacity)
+          line({ x: p.x - 10, y: p.y - 36 }, { x: p.x - 13, y: p.y - 27 }, scarf, 2, opacity)
+          line({ x: p.x + 10, y: p.y - 36 }, { x: p.x + 13, y: p.y - 27 }, scarf, 2, opacity)
+        }
+
         const drawUnit = (unit: Game['units'][number], ghost = false) => {
           const p = toScreen(unit.x, unit.y)
           const color = unit.side === 'blue' ? BLUE : RED
           const radius = unit.card.name === 'Flitzer' ? 11 : 8
-          graphics.fillStyle(0x080d0c, .5)
-          graphics.fillEllipse(p.x, p.y + 8, radius * 2.7, 7)
-          graphics.fillStyle(cardColor(unit.card), ghost ? .45 : 1)
-          graphics.fillCircle(p.x, p.y, radius)
-          graphics.fillStyle(color, ghost ? .45 : 1)
-          graphics.fillCircle(p.x, p.y - radius * .65, radius * .58)
-          graphics.lineStyle(1.5, DARK, .9)
-          graphics.strokeCircle(p.x, p.y, radius)
+          if (unit.card.name === 'Der Ultra') drawUltra(unit, ghost)
+          else {
+            graphics.fillStyle(0x080d0c, .5)
+            graphics.fillEllipse(p.x, p.y + 8, radius * 2.7, 7)
+            graphics.fillStyle(cardColor(unit.card), ghost ? .45 : 1)
+            graphics.fillCircle(p.x, p.y, radius)
+            graphics.fillStyle(color, ghost ? .45 : 1)
+            graphics.fillCircle(p.x, p.y - radius * .65, radius * .58)
+            graphics.lineStyle(1.5, DARK, .9)
+            graphics.strokeCircle(p.x, p.y, radius)
+          }
           graphics.fillStyle(DARK, .8)
-          graphics.fillRect(p.x - 10, p.y + 13, 20, 3)
+          const barWidth = unit.card.name === 'Der Ultra' ? 28 : 20
+          graphics.fillRect(p.x - barWidth / 2, p.y + 20, barWidth, 3)
           graphics.fillStyle(color, ghost ? .5 : 1)
-          graphics.fillRect(p.x - 10, p.y + 13, 20 * Math.max(0, unit.hp / unit.card.hp), 3)
+          graphics.fillRect(p.x - barWidth / 2, p.y + 20, barWidth * Math.max(0, unit.hp / unit.card.hp), 3)
         }
 
         const drawEffects = () => {
