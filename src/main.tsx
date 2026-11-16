@@ -36,6 +36,26 @@ function multiplayerHealthUrl() {
   return `${endpoint.replace(/^ws/, 'http').replace(/\/$/, '')}/health`
 }
 
+function multiplayerSocketUrl() {
+  return multiplayerHealthUrl().replace(/\/health$/, '').replace(/^http/, 'ws')
+}
+
+function checkMultiplayerSocket(signal: AbortSignal) {
+  return new Promise<boolean>(resolve => {
+    const socket = new WebSocket(multiplayerSocketUrl())
+    let settled = false
+    const finish = (online: boolean) => {
+      if (settled) return
+      settled = true
+      socket.close()
+      resolve(online)
+    }
+    socket.onopen = () => finish(true)
+    socket.onerror = () => finish(false)
+    signal.addEventListener('abort', () => finish(false), { once: true })
+  })
+}
+
 function App() {
   const [deck, setDeck] = useState(loadDeck)
   const preview = new URLSearchParams(window.location.search).get('preview')
@@ -94,7 +114,10 @@ function App() {
         setServerStatus('online')
       })
       .catch(() => {
-        if (!controller.signal.aborted) setServerStatus('offline')
+        if (controller.signal.aborted) return
+        void checkMultiplayerSocket(controller.signal).then(online => {
+          if (!controller.signal.aborted) setServerStatus(online ? 'online' : 'offline')
+        })
       })
     return () => controller.abort()
   }, [page])
