@@ -688,7 +688,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
 
         const drawPlacement = () => {
            if (!activeRef.current || !hover) return
-           const placement = deploymentPoint(selectedRef.current, hover.x, hover.y, perspectiveRef.current)
+           const placement = deploymentPoint(gameRef.current, selectedRef.current, hover.x, hover.y, perspectiveRef.current)
            const allowed = canDeploy(gameRef.current, selectedRef.current, placement.x, placement.y, perspectiveRef.current)
            const p = toScreen(placement.x, placement.y)
           const m = metrics()
@@ -721,7 +721,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
         this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
            if (!activeRef.current) return
            const rawTarget = fromPointer(pointer)
-           const target = deploymentPoint(selectedRef.current, rawTarget.x, rawTarget.y, perspectiveRef.current)
+           const target = deploymentPoint(gameRef.current, selectedRef.current, rawTarget.x, rawTarget.y, perspectiveRef.current)
            if (canDeploy(gameRef.current, selectedRef.current, target.x, target.y, perspectiveRef.current)) {
              onPlaceRef.current(target.x, target.y, draggingRef.current)
           }
@@ -748,7 +748,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           if (!draggingRef.current || !pointerDown) return
            const target = fromClientPointer(event)
            if (target && activeRef.current) {
-             const placement = deploymentPoint(selectedRef.current, target.x, target.y, perspectiveRef.current)
+             const placement = deploymentPoint(gameRef.current, selectedRef.current, target.x, target.y, perspectiveRef.current)
              if (canDeploy(gameRef.current, selectedRef.current, placement.x, placement.y, perspectiveRef.current)) {
                onPlaceRef.current(placement.x, placement.y, true)
              }
