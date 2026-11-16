@@ -303,17 +303,19 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
             stroke([-5, -3], [5, -3], 0x93958a, 1, .65 * opacity)
           }
 
-          // Bald, scarred head. The bare scalp is brighter than the vest.
+          // Short black hair and a scarred front. The back stays clean and
+          // only shows the haircut, neck and scarf.
           graphics.fillStyle(skin, opacity)
           graphics.fillCircle(p.x, p.y - 31 * scale, 13 * scale)
           graphics.lineStyle(1.5 * scale, DARK, opacity)
           graphics.strokeCircle(p.x, p.y - 31 * scale, 13 * scale)
-          stroke([-8, -39], [-2, -43], 0xe3b18f, 1.4, .65 * opacity)
-          stroke([2, -43], [8, -39], 0xe3b18f, 1.2, .55 * opacity)
+          shape([
+            [-11, -34], [-10, -41], [-5, -45], [3, -45], [10, -41],
+            [11, -34], [7, -37], [2, -39], [-4, -38], [-9, -36],
+          ], 0x15191a, opacity, DARK)
+          stroke([-7, -41], [-4, -45], 0x3d4540, 1, .8 * opacity)
+          stroke([0, -43], [3, -45], 0x3d4540, 1, .8 * opacity)
           if (back) {
-            stroke([-8, -34], [-3, -29], 0x794936, 1.8, opacity)
-            stroke([5, -36], [1, -29], 0x794936, 1.5, opacity)
-            stroke([-5, -40], [4, -42], 0xe8bb98, 1.2, .7 * opacity)
             stroke([-8, -29], [8, -29], scarf, 2.5, opacity)
             stroke([-4, -27], [0, -20], scarf, 1.5, opacity)
             stroke([4, -27], [0, -20], scarf, 1.5, opacity)
@@ -325,6 +327,8 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
             stroke([2, -35], [7, -33], 0x070f12, 1.8, opacity)
             stroke([-6, -25], [6, -25], 0x070f12, 2.5, opacity)
             stroke([-3, -24], [0, -22], 0xb43d38, 1.1, opacity)
+            stroke([-8, -39], [-2, -42], 0xe3b18f, 1.2, .6 * opacity)
+            stroke([2, -42], [8, -39], 0xe3b18f, 1.1, .5 * opacity)
             stroke([-10, -31], [-6, -27], 0x794936, 1.7, opacity)
             stroke([8, -29], [5, -24], 0x794936, 1.5, opacity)
           }
