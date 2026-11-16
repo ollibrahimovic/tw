@@ -576,10 +576,24 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           const p = toScreen(unit.x, unit.y)
           const radius = unit.card.name === 'Der Ultra' ? 25 : unit.card.name === 'Flitzer' ? 18 : 15
           const pulse = 1 + Math.sin(animationClock * .012 + unit.id) * .06
-          spawnIndicators.lineStyle(2, unit.side === 'blue' ? BLUE : RED, .9)
+          const teamColor = unit.side === 'blue' ? BLUE : RED
+          spawnIndicators.lineStyle(1, teamColor, .22)
           spawnIndicators.strokeCircle(p.x, p.y, radius * pulse)
           spawnIndicators.lineStyle(4, 0xe4d09a, .95)
-          spawnIndicators.arc(p.x, p.y, radius * pulse, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress, false)
+          if (progress > .001) {
+            const segments = 32
+            const filledSegments = Math.ceil(segments * progress)
+            for (let i = 0; i < filledSegments; i++) {
+              const start = -Math.PI / 2 + Math.PI * 2 * i / segments
+              const end = -Math.PI / 2 + Math.PI * 2 * Math.min(i + 1, segments * progress) / segments
+              spawnIndicators.lineBetween(
+                p.x + Math.cos(start) * radius * pulse,
+                p.y + Math.sin(start) * radius * pulse,
+                p.x + Math.cos(end) * radius * pulse,
+                p.y + Math.sin(end) * radius * pulse,
+              )
+            }
+          }
           spawnIndicators.fillStyle(0x101815, .8)
           spawnIndicators.fillCircle(p.x, p.y, 2.5)
         }

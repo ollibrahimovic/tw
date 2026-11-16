@@ -403,11 +403,34 @@
   .app-shell.in-arena .next-card-preview {
     grid-template-columns: 27px minmax(0, 1fr);
     gap: 5px;
+    width: min(92px, calc(100% - 88px));
+    max-width: 92px;
+    height: 27px;
+    min-height: 27px;
+    overflow: hidden;
+    align-items: center;
   }
 
   .app-shell.in-arena .next-card-preview .next-card-art {
     width: 27px;
-    height: 34px;
+    height: 27px;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+    overflow: visible;
+  }
+
+  .app-shell.in-arena .next-card-preview .card-art {
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    background: transparent !important;
+    overflow: visible;
+  }
+
+  .app-shell.in-arena .next-card-preview .card-art::after,
+  .app-shell.in-arena .next-card-preview .portrait-number {
+    display: none;
   }
 
   .app-shell.in-arena .next-card-preview small,
