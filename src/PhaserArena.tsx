@@ -75,6 +75,26 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
         const displaySide = (side: Side): Side => side === perspectiveRef.current ? 'blue' : 'red'
         const spawnIndicators = this.add.graphics().setDepth(11)
         const atmosphere = this.add.graphics().setDepth(.25)
+        const phaseBackdrop = this.add.graphics().setDepth(30)
+        const phaseText = this.add.text(0, 0, '', {
+          color: '#f8edc7',
+          fontFamily: 'Arial Black, sans-serif',
+          fontSize: '34px',
+          fontStyle: 'bold',
+          stroke: '#17231b',
+          strokeThickness: 8,
+          align: 'center',
+        }).setOrigin(.5).setDepth(31)
+        const phaseSubtitle = this.add.text(0, 0, '', {
+          color: '#d8c77e',
+          fontFamily: 'Arial, sans-serif',
+          fontSize: '13px',
+          fontStyle: 'bold',
+          letterSpacing: 2,
+          stroke: '#17231b',
+          strokeThickness: 4,
+          align: 'center',
+        }).setOrigin(.5).setDepth(31)
         const showArt = (id: string, key: string, p: Point, character: boolean, alpha = 1, depth = 1) => {
           if (!this.textures.exists(key)) return false
           usedSprites.add(id)
@@ -141,6 +161,36 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
             atmosphere.fillRect(x, y, length, 1.8)
             if (i % 2 === 0) atmosphere.fillRect(x + length * .4, y - 2, 1.8, 4)
           }
+        }
+        const drawPhaseAlert = () => {
+          const seconds = gameRef.current.time
+          const suddenDeath = gameRef.current.overtime > 0 && gameRef.current.overtime <= 3.5
+          const active = !gameRef.current.result && (suddenDeath || (seconds > 0 && seconds <= 60))
+          if (!active) {
+            phaseBackdrop.clear()
+            phaseText.setVisible(false)
+            phaseSubtitle.setVisible(false)
+            return
+          }
+          const m = metrics()
+          const finalCountdown = !suddenDeath && seconds <= 10
+          const pulse = finalCountdown ? 1 + Math.sin(animationClock * .012) * .06 : 1
+          const width = suddenDeath ? 330 : finalCountdown ? 158 : 290
+          const height = suddenDeath ? 102 : finalCountdown ? 132 : 78
+          const x = m.left + m.pitchWidth / 2
+          const y = m.top + m.pitchHeight / 2
+          phaseBackdrop.clear()
+            .fillStyle(suddenDeath || finalCountdown ? 0x8f3f32 : 0x17231b, suddenDeath || finalCountdown ? .9 : .82)
+            .fillRoundedRect(x - width / 2, y - height / 2, width, height, 14)
+            .lineStyle(2, suddenDeath || finalCountdown ? 0xf0a35d : 0xd8c77e, .9)
+            .strokeRoundedRect(x - width / 2, y - height / 2, width, height, 14)
+          phaseText.setPosition(x, y - (suddenDeath ? 10 : finalCountdown ? 10 : 6))
+            .setScale(suddenDeath ? 1 + Math.sin(animationClock * .01) * .04 : pulse)
+            .setText(suddenDeath ? '☠ SUDDEN DEATH ☠' : finalCountdown ? String(Math.ceil(seconds)) : 'LETZTE 60 SEKUNDEN')
+            .setVisible(true)
+          phaseSubtitle.setPosition(x, y + (suddenDeath ? 35 : finalCountdown ? 43 : 25))
+            .setText(suddenDeath ? 'CLUBHAUS FÄLLT ODER VERLÄNGERUNG ENDET' : finalCountdown ? 'NOCH ZEIT' : 'ENDSPURT')
+            .setVisible(true)
         }
 
         const metrics = () => {
@@ -723,6 +773,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           }
           drawEffects()
           drawPlacement()
+          drawPhaseAlert()
           for (const [id, sprite] of sprites) {
             if (!usedSprites.has(id)) {
               sprite.destroy()

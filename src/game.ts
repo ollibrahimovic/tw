@@ -55,7 +55,7 @@ export const cards: Card[] = [
   { name: 'Pyro-Fan', role: 'Flächenschaden', cost: 5, icon: '♨', color: '#db5938', damage: 85, hp: 360, speed: 4.5, range: 11, rate: 1.3, rarity: 'Epic' },
   { name: 'Rauchbombe', role: 'Verlangsamt und verhüllt', cost: 3, icon: '◌', color: '#85877c', damage: 225, hp: 1, speed: 0, range: 0, rate: 0, rarity: 'Rare', kind: 'spell' },
   { name: 'Leuchtrakete', role: 'Markiert und schädigt Gegner', cost: 2, icon: '✹', color: '#f1a642', damage: 220, hp: 1, speed: 0, range: 0, rate: 0, rarity: 'Common', kind: 'spell' },
-  { name: 'Bengalo-Salve', role: 'Mehrfacher Flächenschaden', cost: 5, icon: '♨', color: '#e85b36', damage: 300, hp: 1, speed: 0, range: 0, rate: 0, rarity: 'Epic', kind: 'spell' },
+  { name: 'Bengalo-Salve', role: 'Mehrfacher Flächenschaden', cost: 6, icon: '♨', color: '#e85b36', damage: 300, hp: 1, speed: 0, range: 0, rate: 0, rarity: 'Epic', kind: 'spell' },
   { name: 'Bierdusche', role: 'Heilt Freunde und bremst Feinde', cost: 3, icon: '☂', color: '#d5a53b', damage: 0, hp: 1, speed: 0, range: 0, rate: 0, rarity: 'Rare', kind: 'spell' },
   { name: 'Zaunbrecher', role: 'Schwerer Gebäudestürmer', cost: 5, icon: '⚒', color: '#8d604b', damage: 110, hp: 950, speed: 2.8, range: 3, rate: 1.2, rarity: 'Rare' },
   { name: 'Megafon-Capo', role: 'Verstärkt nahe Verbündete', cost: 4, icon: '📣', color: '#b94f48', damage: 28, hp: 500, speed: 4, range: 3, rate: 1, rarity: 'Epic' },
@@ -64,7 +64,7 @@ export const cards: Card[] = [
   { name: 'Bierbude', role: 'Verliert Leben und spawnt alle 5s Bierbecher-Werfer', cost: 4, icon: '▣', color: '#c99b42', damage: 0, hp: 600, speed: 0, range: 0, rate: 5, rarity: 'Rare', kind: 'building' },
   { name: 'Würstchenverkäufer', role: 'Aggressiver Nahkämpfer aus der Würstchenbude', cost: 0, icon: '♨', color: '#d47b3c', damage: 92, hp: 560, speed: 6.5, range: 3, rate: .7, rarity: 'Rare', hidden: true },
   { name: 'Würstchenbude', role: 'Lockt Gegner an; spawnt beim Einsturz einen Verkäufer', cost: 4, icon: '▤', color: '#b87843', damage: 0, hp: 760, speed: 0, range: 0, rate: 0, rarity: 'Rare', kind: 'building' },
-  { name: 'Flitzer', role: 'Langsamer Gebäudetank und Ablenkung', cost: 5, icon: '●', color: '#c58f72', damage: 25, hp: 1500, speed: 2.2, range: 3, rate: 1.2, rarity: 'Epic' },
+  { name: 'Flitzer', role: 'Schneller Gebäudestürmer und Ablenkung', cost: 5, icon: '●', color: '#c58f72', damage: 25, hp: 1500, speed: 4.8, range: 3, rate: 1.2, rarity: 'Epic' },
   { name: 'Fanmarsch', role: 'Geschlossener Gebäudetank mit Banner', cost: 6, icon: '⚑', color: '#7d8f9b', damage: 24, hp: 2600, speed: 1.55, range: 3, rate: 1.4, rarity: 'Legendary' },
 ]
 export const AI_DECK = [0, 2, 3, 5, 7, 9, 16, 20]
