@@ -14,6 +14,7 @@ const httpServer = createServer((request, response) => {
 })
 const wss = new WebSocketServer({ server: httpServer })
 const rooms = new Map()
+const matchmaking = []
 
 function code() {
   let value
@@ -31,15 +32,37 @@ function broadcast(room, message) {
 }
 
 function validDeck(deck) {
-  return Array.isArray(deck) && deck.length === 8 && new Set(deck).size === 8 && deck.every(id => Number.isInteger(id) && id >= 0 && id < cards.length)
+  return Array.isArray(deck) && deck.length === 8 && new Set(deck).size === 8 &&
+    deck.every(id => Number.isInteger(id) && id >= 0 && id < cards.length && !cards[id].hidden)
 }
 
 function closeRoom(room, reason = 'Der Raum wurde geschlossen.') {
   if (room.timer) clearInterval(room.timer)
   if (room.startTimer) clearTimeout(room.startTimer)
   rooms.delete(room.code)
+  const queueIndex = matchmaking.indexOf(room)
+  if (queueIndex >= 0) matchmaking.splice(queueIndex, 1)
   broadcast(room, { type: 'room-closed', reason })
   for (const player of room.players) player.socket.close()
+}
+
+function queueForMatch(socket, deck) {
+  while (matchmaking.length && matchmaking[0].players[0].socket.readyState !== 1) matchmaking.shift()
+  const waiting = matchmaking.shift()
+  if (waiting) {
+    waiting.players.push({ socket, deck })
+    socket.room = waiting
+    send(waiting.players[0].socket, { type: 'room', code: waiting.code, role: 'blue', waiting: false })
+    send(socket, { type: 'room', code: waiting.code, role: 'red', waiting: false })
+    send(waiting.players[0].socket, { type: 'opponent-joined' })
+    begin(waiting)
+    return
+  }
+  const room = { code: code(), players: [{ socket, deck }], game: null, timer: null, lastBroadcast: 0 }
+  rooms.set(room.code, room)
+  matchmaking.push(room)
+  socket.room = room
+  send(socket, { type: 'room', code: room.code, role: 'blue', waiting: true })
 }
 
 function begin(room) {
@@ -68,6 +91,11 @@ function handle(socket, message) {
     rooms.set(room.code, room)
     socket.room = room
     send(socket, { type: 'room', code: room.code, role: 'blue', invite: `${process.env.PUBLIC_URL || ''}/?match=${room.code}`, waiting: true })
+    return
+  }
+  if (message.type === 'matchmake') {
+    if (!validDeck(message.deck)) return send(socket, { type: 'error', message: 'Bitte wähle genau 8 gültige Karten.' })
+    queueForMatch(socket, message.deck)
     return
   }
   if (message.type === 'join') {

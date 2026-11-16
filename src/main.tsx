@@ -17,7 +17,9 @@ function loadDeck(): number[] {
   try {
     const value: unknown = JSON.parse(localStorage.getItem('terrace-deck') || 'null')
     if (Array.isArray(value)) {
-      const valid = [...new Set(value.filter(v => Number.isInteger(v) && v >= 0 && v < cards.length) as number[])]
+      const valid = [...new Set(value.filter(v =>
+        Number.isInteger(v) && v >= 0 && v < cards.length && !cards[v as number].hidden,
+      ) as number[])]
       if (valid.length >= 8) return valid.slice(0, 8)
     }
   } catch { /* Default deck when storage is unavailable. */ }
@@ -39,7 +41,7 @@ function App() {
   const [page, setPage] = useState<'menu' | 'arena' | 'deck'>(preview ? 'arena' : initialMatch ? 'deck' : 'menu')
   const [running, setRunning] = useState(false)
   const [countdown, setCountdown] = useState<number | 'go' | null>(null)
-  const [onlineMode, setOnlineMode] = useState<'create' | 'join' | null>(initialMatch ? 'join' : null)
+  const [onlineMode, setOnlineMode] = useState<'create' | 'join' | 'matchmake' | null>(initialMatch ? 'join' : null)
   const [onlineStatus, setOnlineStatus] = useState<'offline' | 'connecting' | 'waiting' | 'playing'>('offline')
   const [onlineRole, setOnlineRole] = useState<Side>('blue')
   const [inviteLink, setInviteLink] = useState('')
@@ -251,7 +253,10 @@ function App() {
     return () => window.removeEventListener('keydown', key)
   }, [page, game.result])
   function startOnline() {
-    if (deck.length !== 8) {
+    const validDeck = deck.length === 8 &&
+      new Set(deck).size === 8 &&
+      deck.every(id => Number.isInteger(id) && id >= 0 && id < cards.length && !cards[id].hidden)
+    if (!validDeck) {
       setPage('deck')
       setMessage('Wähle genau 8 Karten für dein Deck.')
       return
@@ -273,7 +278,9 @@ function App() {
     socket.current = connection
     connection.onopen = () => {
       const code = new URLSearchParams(window.location.search).get('match')
-      connection.send(JSON.stringify(code ? { type: 'join', code, deck } : { type: 'create', deck }))
+      connection.send(JSON.stringify(code
+        ? { type: 'join', code, deck }
+        : onlineMode === 'matchmake' ? { type: 'matchmake', deck } : { type: 'create', deck }))
     }
     connection.onmessage = event => {
       const message = JSON.parse(event.data) as { type: string; state?: Game; role?: Side; code?: string; invite?: string; waiting?: boolean; message?: string; reason?: string }
@@ -374,16 +381,16 @@ function App() {
       <h1>DEIN BLOCK.<br />DEIN VEREIN.<br /><em>DEIN DERBY.</em></h1>
        <p>Siebzehn Karten. Zwei Lanes. Drei Minuten.<br />Bring deine Firm auf den Platz und hol dir das Derby.</p>
        <button className="primary" onClick={() => { setOnlineMode(null); setPage('deck') }}><Swords size={21} /> GEGEN KI SPIELEN <span>→</span></button>
-       <button className="secondary multiplayer-entry" onClick={() => { setOnlineMode('create'); setPage('deck') }}><Swords size={18} /> MULTIPLAYER-SPIEL ERSTELLEN</button>
+       <button className="secondary multiplayer-entry" onClick={() => { setOnlineMode('matchmake'); setPage('deck') }}><Swords size={18} /> GEGNER SUCHEN</button>
        <div className="menu-facts"><span><b>01</b> Karte auswählen</span><span><b>02</b> Hool platzieren</span><span><b>03</b> Clubhaus zerstören</span></div>
        <div className="menu-crest"><span>EST. 2026</span><strong>TW</strong><Swords size={70} /><b>RIVERSIDE FIRM</b><small>ONE PITCH. ONE WINNER.</small></div>
        <div className="menu-note">Kostenloses Browser-MVP · Training gegen KI · Eigene, fiktive Vereine</div>
        {tutorial && <div className="tutorial-card"><div className="eyebrow">KURZANLEITUNG</div><h2>Dein Derby in drei Zügen</h2><ol><li><b>Karte wählen</b><span>Wähle eine der vier Karten unten.</span></li><li><b>Links platzieren</b><span>Setze Truppen in deiner Hälfte ein; Zauber treffen das ganze Feld.</span></li><li><b>Clubhaus stürmen</b><span>Zerstöre erst die Kneipen und dann das gegnerische Clubhaus.</span></li></ol><button className="secondary" onClick={closeTutorial}>VERSTANDEN</button></div>}
      </section>}
-      {page === 'deck' && <section className="page deck-page"><div className="eyebrow">{onlineMode ? 'MULTIPLAYER · ' : ''}DEINE FIRM · {deck.length}/8 KARTEN</div><h1>{onlineMode === 'join' ? 'Dem Derby beitreten.' : onlineMode === 'create' ? 'Ein Derby eröffnen.' : 'Die Startelf? Dein Deck.'}</h1><p>Wähle genau acht Karten. Die ersten vier bilden deine Starthand; gespielte Karten wandern ans Ende.</p><div className="collection">{cards.filter(card => !card.hidden).map(card => { const id = cards.indexOf(card)
+       {page === 'deck' && <section className="page deck-page"><div className="eyebrow">{onlineMode ? 'MULTIPLAYER · ' : ''}DEINE FIRM · {deck.length}/8 KARTEN</div><h1>{onlineMode === 'join' ? 'Dem Derby beitreten.' : onlineMode === 'create' ? 'Ein Derby eröffnen.' : onlineMode === 'matchmake' ? 'Gegner finden.' : 'Die Startelf? Dein Deck.'}</h1><p>Wähle genau acht Karten. Die ersten vier bilden deine Starthand; gespielte Karten wandern ans Ende.</p><div className="collection">{cards.filter(card => !card.hidden).map(card => { const id = cards.indexOf(card)
        const selectedInDeck = deck.indexOf(id)
        return <article className={`collection-card ${rarityClass(card)} ${selectedInDeck >= 0 ? 'deck-selected' : ''}`} key={id}>{cardArt(card)}<span className={`rarity ${rarityClass(card)}`}>{card.rarity} · {card.cost} Hype</span><h2>{card.name}</h2><p>{card.role}</p><div className="card-stats">{card.hp} HP · {card.damage} Schaden<br />{card.kind === 'building' ? 'Gebäude' : `${card.rate}s Angriff · Tempo ${card.speed}`}</div><button className="secondary" onClick={() => toggleDeck(id)}>{selectedInDeck >= 0 ? `${selectedInDeck + 1} · Entfernen` : '＋ Hinzufügen'}</button>{selectedInDeck >= 0 && <button className="secondary deck-reorder" onClick={() => reorder(selectedInDeck)}>Nach vorne ↑</button>}</article>
-      })}</div><button className="primary" disabled={deck.length !== 8} onClick={start}>{onlineMode === 'join' ? 'DERBY BEITRETEN' : onlineMode === 'create' ? 'EINLADUNG ERSTELLEN' : 'MIT DIESEM DECK SPIELEN'} <Play size={18} /></button></section>}
+       })}</div><button className="primary" disabled={deck.length !== 8} onClick={start}>{onlineMode === 'join' ? 'DERBY BEITRETEN' : onlineMode === 'create' ? 'EINLADUNG ERSTELLEN' : onlineMode === 'matchmake' ? 'GEGNER SUCHEN' : 'MIT DIESEM DECK SPIELEN'} <Play size={18} /></button></section>}
      {page === 'arena' && <section className={`page arena-page ${game.result ? 'showing-result' : ''}`}>
         <div className="mobile-match-timer" aria-label="Verbleibende Spielzeit">{Math.floor(time / 60).toString().padStart(2, '0')}:{(time % 60).toString().padStart(2, '0')}</div>
        <div className="heading-row"><div><div className="eyebrow"><span className="live-dot" /> TRAINING · GEGEN KI</div><h1>Riverside Derby</h1><p>One pitch. Two firms. Only one winner.</p></div><div className="match-meta"><div><span>{time <= 60 ? 'FINALE PHASE' : 'HEIMSPIEL'}</span><strong>{time <= 60 ? '2× HYPE' : 'RIVERSIDE'}</strong></div><div className={`timer ${time <= 30 ? 'urgent' : ''}`}>{Math.floor(time / 60).toString().padStart(2, '0')}:{(time % 60).toString().padStart(2, '0')}</div><button className="icon-button" disabled={!!game.result || countdown !== null} onClick={() => setRunning(v => !v)} aria-label={running ? 'Pausieren' : 'Fortsetzen'}>{running ? <Pause size={18} /> : <Play size={18} />}</button></div></div>
@@ -425,7 +432,7 @@ function App() {
              </div>
               <p>{game.result === 'DERBYSIEG!' ? `Außenposten: ${blueScore} : ${redScore} · ${Math.round(game.totalDamage)} Gesamtschaden · Die Nacht gehört Riverside.` : `Außenposten: ${blueScore} : ${redScore} · ${Math.round(game.totalDamage)} Gesamtschaden · Aufstehen, Krone richten.`}</p>
               <div className="result-actions"><button className="primary" onClick={start}>REVANCHE <Play size={18} /></button><button className="secondary" onClick={() => setPage('menu')}>Hauptmenü</button></div>
-            </div> : onlineStatus !== 'offline' ? <div className="match-overlay multiplayer-overlay"><Swords size={40} /><h2>{onlineStatus === 'waiting' ? 'DEIN DERBY-WARTERAUM' : 'VERBINDUNG WIRD HERGESTELLT'}</h2><p>{onlineStatus === 'waiting' ? 'Link schicken oder QR-Code scannen:' : onlineMessage || 'Der Multiplayer-Server wird kontaktiert …'}</p>{inviteLink && <div className="invite-link">{inviteQr && <img className="invite-qr" src={inviteQr} alt="QR-Code für die Derby-Einladung" />}<code>{inviteLink}</code><button className="secondary" onClick={() => navigator.clipboard?.writeText(inviteLink)}>LINK KOPIEREN</button></div>}{onlineMessage && onlineStatus === 'waiting' && <small>{onlineMessage}</small>}<button className="secondary" onClick={() => { socket.current?.close(); setOnlineStatus('offline'); setOnlineMode(null); setPage('menu') }}>Abbrechen</button></div> : <div className="match-overlay"><Trophy size={40} /><h2>HALBZEIT IM KOPF.</h2><p>Kurz durchatmen. Dein Derby wartet.</p><button className="primary" onClick={() => setRunning(true)}>WEITERSPIELEN <Play size={18} /></button><button className="secondary" onClick={() => setPage('menu')}>Hauptmenü</button></div>)}
+             </div> : onlineStatus !== 'offline' ? <div className="match-overlay multiplayer-overlay"><Swords size={40} /><h2>{onlineStatus === 'waiting' ? onlineMode === 'matchmake' ? 'GEGNER WIRD GESUCHT' : 'DEIN DERBY-WARTERAUM' : 'VERBINDUNG WIRD HERGESTELLT'}</h2><p>{onlineStatus === 'waiting' ? onlineMode === 'matchmake' ? 'Du wirst automatisch mit dem nächsten Spieler verbunden.' : 'Link schicken oder QR-Code scannen:' : onlineMessage || 'Der Multiplayer-Server wird kontaktiert …'}</p>{onlineMode !== 'matchmake' && inviteLink && <div className="invite-link">{inviteQr && <img className="invite-qr" src={inviteQr} alt="QR-Code für die Derby-Einladung" />}<code>{inviteLink}</code><button className="secondary" onClick={() => navigator.clipboard?.writeText(inviteLink)}>LINK KOPIEREN</button></div>}{onlineMessage && onlineStatus === 'waiting' && <small>{onlineMessage}</small>}<button className="secondary" onClick={() => { socket.current?.close(); setOnlineStatus('offline'); setOnlineMode(null); setPage('menu') }}>Abbrechen</button></div> : <div className="match-overlay"><Trophy size={40} /><h2>HALBZEIT IM KOPF.</h2><p>Kurz durchatmen. Dein Derby wartet.</p><button className="primary" onClick={() => setRunning(true)}>WEITERSPIELEN <Play size={18} /></button><button className="secondary" onClick={() => setPage('menu')}>Hauptmenü</button></div>)}
         </div><div className="arena-legend"><span><i className="legend-dot blue" /> DEINE FIRM</span><span><i className="legend-dot red" /> KIEZ FIRM</span><span>2 LANES · 2 BRÜCKEN</span></div></section>
         <aside className="sidebar right-sidebar"><div className="player-card red-player"><div className="score">{redScore}</div><div className="player-id"><div className="crest red-crest">K</div><div><b>KiezKalle <span className="cpu-badge">KI</span></b><small>Auswärtsblock</small></div></div></div><div className="stat-card"><div className="stat-title">RIVALEN-CLUBHAUS <Heart size={14} /></div><div className="health-value">{Math.ceil(buildingHp.redFortress)} <small>/ 3.000 HP</small></div><div className="health-bar red-health"><i style={{ width: `${buildingHp.redFortress / 30}%` }} /></div></div><div className="combat-log"><div className="stat-title">LIVE-TICKER <Swords size={14} /></div>{game.log.map((entry, i) => <p key={i}>{entry}</p>)}</div></aside>
       </div>
