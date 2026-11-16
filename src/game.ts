@@ -27,9 +27,9 @@ export const UNIT_COLLISION_DISTANCE = 3.5
 export const BLOOD_STAIN_LIFETIME = 3.2
 export const SPELL_FLIGHT = 1.8
 export const SMOKE_RADIUS = 18
-export const SMOKE_DAMAGE_PER_SECOND = 12
+export const SMOKE_DAMAGE_PER_SECOND = 30
 export const SIGNAL_RADIUS = 15
-export const SIGNAL_BUILDING_DAMAGE = 180
+export const SIGNAL_BUILDING_DAMAGE = 220
 export const BEER_FLIGHT = .5
 export const PUDDLE_LIFETIME = 2.4
 export type BuildingTarget = BuildingKey | `stall:${number}`
@@ -50,13 +50,13 @@ export const cards: Card[] = [
   { name: 'Auswärtsfahrer', role: 'Schneller Angreifer', cost: 4, icon: '➤', color: '#398a78', damage: 70, hp: 420, speed: 10, range: 3, rate: .7, rarity: 'Rare' },
   { name: 'Der Ordner', role: 'Verlangsamt nahe Gegner', cost: 3, icon: '✚', color: '#6e7d52', damage: 40, hp: 600, speed: 4, range: 4, rate: 1, rarity: 'Rare' },
   { name: 'Pyro-Fan', role: 'Flächenschaden', cost: 5, icon: '♨', color: '#db5938', damage: 85, hp: 360, speed: 4.5, range: 11, rate: 1.3, rarity: 'Epic' },
-  { name: 'Rauchbombe', role: 'Verlangsamt und verhüllt', cost: 3, icon: '◌', color: '#85877c', damage: 0, hp: 1, speed: 0, range: 0, rate: 0, rarity: 'Rare', kind: 'spell' },
-  { name: 'Leuchtrakete', role: 'Markiert und schädigt Gegner', cost: 2, icon: '✹', color: '#f1a642', damage: 45, hp: 1, speed: 0, range: 0, rate: 0, rarity: 'Common', kind: 'spell' },
-  { name: 'Bengalo-Salve', role: 'Mehrfacher Flächenschaden', cost: 5, icon: '♨', color: '#e85b36', damage: 75, hp: 1, speed: 0, range: 0, rate: 0, rarity: 'Epic', kind: 'spell' },
+  { name: 'Rauchbombe', role: 'Verlangsamt und verhüllt', cost: 3, icon: '◌', color: '#85877c', damage: 225, hp: 1, speed: 0, range: 0, rate: 0, rarity: 'Rare', kind: 'spell' },
+  { name: 'Leuchtrakete', role: 'Markiert und schädigt Gegner', cost: 2, icon: '✹', color: '#f1a642', damage: 220, hp: 1, speed: 0, range: 0, rate: 0, rarity: 'Common', kind: 'spell' },
+  { name: 'Bengalo-Salve', role: 'Mehrfacher Flächenschaden', cost: 5, icon: '♨', color: '#e85b36', damage: 300, hp: 1, speed: 0, range: 0, rate: 0, rarity: 'Epic', kind: 'spell' },
   { name: 'Bierdusche', role: 'Heilt Freunde und bremst Feinde', cost: 3, icon: '☂', color: '#d5a53b', damage: 0, hp: 1, speed: 0, range: 0, rate: 0, rarity: 'Rare', kind: 'spell' },
   { name: 'Zaunbrecher', role: 'Schwerer Gebäudestürmer', cost: 5, icon: '⚒', color: '#8d604b', damage: 110, hp: 950, speed: 2.8, range: 3, rate: 1.2, rarity: 'Rare' },
   { name: 'Megafon-Capo', role: 'Verstärkt nahe Verbündete', cost: 4, icon: '📣', color: '#b94f48', damage: 28, hp: 500, speed: 4, range: 3, rate: 1, rarity: 'Epic' },
-  { name: 'Auswärtsblock', role: 'Vier schnelle Fans', cost: 5, icon: '➤', color: '#3f8d7b', damage: 25, hp: 190, speed: 8, range: 3, rate: .8, rarity: 'Rare' },
+  { name: 'Auswärtsblock', role: 'Vier schnelle Fans', cost: 5, icon: '➤', color: '#3f8d7b', damage: 20, hp: 150, speed: 7.5, range: 3, rate: .8, rarity: 'Rare' },
   { name: 'Pyro-Trupp', role: 'Drei mobile Bengalo-Werfer', cost: 6, icon: '♨', color: '#d95b3b', damage: 55, hp: 260, speed: 4.5, range: 11, rate: 1.3, rarity: 'Epic' },
   { name: 'Bierbude', role: 'Verliert Leben und spawnt alle 5s Bierbecher-Werfer', cost: 4, icon: '▣', color: '#c99b42', damage: 0, hp: 600, speed: 0, range: 0, rate: 5, rarity: 'Rare', kind: 'building' },
   { name: 'Würstchenverkäufer', role: 'Aggressiver Nahkämpfer aus der Würstchenbude', cost: 0, icon: '♨', color: '#d47b3c', damage: 92, hp: 560, speed: 6.5, range: 3, rate: .7, rarity: 'Rare', hidden: true },
@@ -296,8 +296,8 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
       g.impacts.push({ id: spell.id, x: spell.x, y: spell.y, age: 0 })
       spell.applied = true
     } else if (spell.type === 'salvo' && spell.age >= SPELL_FLIGHT && !spell.applied) {
-        for (const u of g.units) if (u.side !== spell.side && activeUnit(u) && distance(u, spell) <= 15) { u.hp -= 75; recordDamage(g, u, 75, 'area') }
-       for (const b of g.structures) if (b.side !== spell.side && b.hp > 0 && distance(b, spell) <= 15) { b.hp = Math.max(0, b.hp - 75); recordDamage(g, b, 75, 'building') }
+        for (const u of g.units) if (u.side !== spell.side && activeUnit(u) && distance(u, spell) <= 15) { u.hp -= cards[10].damage; recordDamage(g, u, cards[10].damage, 'area') }
+        for (const b of g.structures) if (b.side !== spell.side && b.hp > 0 && distance(b, spell) <= 15) { b.hp = Math.max(0, b.hp - cards[10].damage); recordDamage(g, b, cards[10].damage, 'building') }
       g.fires.push({ id: spell.id, x: spell.x - 2, y: spell.y, age: 0 })
       g.fires.push({ id: spell.id + 1, x: spell.x + 2, y: spell.y + 2, age: 0 })
       g.impacts.push({ id: spell.id, x: spell.x, y: spell.y, age: 0 })
