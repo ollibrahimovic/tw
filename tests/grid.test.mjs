@@ -51,6 +51,7 @@ test('deployment snaps to tiles but subsequent movement remains continuous', () 
   const initial = toTile(game.units[0])
   assert.ok(Math.abs(initial.x - 7) < 1e-10 && Math.abs(initial.y - 20) < 1e-10)
   game.aiClock = 10000
+  game.units[0].spawnDelay = 0
   game = tick(game, .05)
   const moved = toTile(game.units[0])
   assert.ok(Math.abs(moved.y - Math.round(moved.y)) > .001)
@@ -83,4 +84,6 @@ test('buildings occupy a centered 2x2 footprint and cannot sit behind the clubho
   })
   assert.equal(canDeploy(g, cards[16], fromTile({ x: 8, y: 30.8 }).x, fromTile({ x: 8, y: 30.8 }).y), false)
   assert.equal(canDeploy({ ...g, hp: { ...g.hp, bluePubOne: 0, bluePubTwo: 0 } }, cards[16], fromTile({ x: 8, y: 30.8 }).x, fromTile({ x: 8, y: 30.8 }).y), false)
+  const captured = { ...g, hp: { ...g.hp, redPubOne: 0 } }
+  assert.equal(canDeploy(captured, cards[0], fromTile({ x: 4, y: 6 }).x, fromTile({ x: 4, y: 6 }).y), true)
 })

@@ -2,7 +2,7 @@ export type Card = { name: string; role: string; cost: number; icon: string; col
 import { fromTile, toTile, snapToTile, snapBuildingToTile, validTile, walkablePoint, tileDistance, TILE_BUILDINGS, rectCenter, insideRect, buildingRectAt } from './grid.ts'
 import type { TileRect } from './grid.ts'
 export type Side = 'blue' | 'red'
-export type Unit = { id: number; lane: number; x: number; y: number; side: Side; card: Card; hp: number; cooldown: number; routeIndex: number; targetId?: number; moving: boolean; facingBack: boolean; lateralOffset?: number; spawnDelay?: number }
+export type Unit = { id: number; lane: number; x: number; y: number; side: Side; card: Card; hp: number; cooldown: number; routeIndex: number; targetId?: number; moving: boolean; facingBack: boolean; lateralOffset?: number; spawnDelay?: number; spawnDuration?: number }
 export type Structure = { id: number; x: number; y: number; side: Side; card: Card; hp: number; max: number; cooldown: number; age: number }
 export function laneRoute(side: Side, lane: number) {
   const x = lane === 0 ? 4 : 15
@@ -83,7 +83,12 @@ const unitCount = (card: Card) => cards.indexOf(card) === 14 ? 4 : cards.indexOf
 function makeUnits(startId: number, x: number, y: number, side: Side, lane: number, card: Card) {
   const offsets = unitCount(card) === 4 ? [0, -2.8, 2.8, -5.4] : unitCount(card) === 3 ? [0, -3, 3] : [0]
   const routeIndex = side === 'blue' ? x > 58 ? 2 : 0 : x < 42 ? 2 : 0
-  return offsets.map((offset, index) => ({ id: startId + index, x, y: Math.max(4, Math.min(96, y + offset)), lane, card, side, hp: card.hp, cooldown: 0, routeIndex, moving: false, facingBack: false, spawnDelay: index * .16 } satisfies Unit))
+  const baseDelay = card.name === 'Flitzer' || card.name === 'Fanmarsch' ? 2 : 1
+  return offsets.map((offset, index) => ({
+    id: startId + index, x, y: Math.max(4, Math.min(96, y + offset)), lane, card, side, hp: card.hp,
+    cooldown: 0, routeIndex, moving: false, facingBack: false,
+    spawnDelay: baseDelay + index * .16, spawnDuration: baseDelay + index * .16,
+  } satisfies Unit))
 }
 const activeUnit = (unit: Unit) => unit.hp > 0 && (unit.spawnDelay ?? 0) <= 0
 export function canDeploy(g: Game, card: Card, x: number, y: number, side: Side = 'blue') {
@@ -107,7 +112,7 @@ export function canDeploy(g: Game, card: Card, x: number, y: number, side: Side 
   const enemy = side === 'blue' ? 'red' : 'blue'
   const pub = `${enemy}Pub${tile.x < 9.5 ? 'One' : 'Two'}` as BuildingKey
   const ownHalf = side === 'blue' ? tile.y >= 17 : tile.y <= 14
-  const captured = g.hp[pub] <= 0 && (side === 'blue' ? tile.y >= 8 && tile.y <= 14 : tile.y >= 17 && tile.y <= 23)
+  const captured = g.hp[pub] <= 0 && (side === 'blue' ? tile.y >= 1 && tile.y <= 14 : tile.y >= 17 && tile.y <= 30)
   return ownHalf || (card.kind !== 'building' && captured)
 }
 export function deploy(g: Game, slot: number, x: number, y: number, side: Side = 'blue'): Game {
@@ -126,6 +131,11 @@ export function deploy(g: Game, slot: number, x: number, y: number, side: Side =
   if (type) return { ...update, spells: [...g.spells, { id: g.id, type, side, x, y, fromX: side === 'blue' ? 5 : 95, fromY: 50, age: 0 }] }
   if (card.kind === 'building') {
     const structure: Structure = { id: g.id, x, y, side, card, hp: card.hp, max: card.hp, cooldown: 0, age: 0 }
+    if (card === cards[16]) {
+      const spawned = makeUnits(g.id + 1, x, y, side, y < 49 ? 0 : 1, cards[2])
+        .map(unit => ({ ...unit, spawnDelay: 0, spawnDuration: 0 }))
+      return { ...update, structures: [...g.structures, structure], units: [...g.units, ...spawned], id: g.id + 1 + spawned.length }
+    }
     return { ...update, structures: [...g.structures, structure] }
   }
   const units = makeUnits(g.id, x, y, side, y < 49 ? 0 : 1, card)
