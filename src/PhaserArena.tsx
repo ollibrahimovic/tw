@@ -237,7 +237,6 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
           const movement = unit.moving ? 1 : .22
           const legSwing = Math.sin(phase) * 11 * movement
           const armSwing = Math.sin(phase + Math.PI) * 6 * movement
-          const back = unit.facingBack || (unit.side === 'red' && unit.moving)
           const distanceTo = (a: { x: number; y: number }, b: { x: number; y: number }) =>
             Math.hypot(a.x - b.x, a.y - b.y)
           const target = gameRef.current.units.find(other =>
@@ -254,6 +253,7 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
             enemyBuildingInRange
           )
           const punch = punching ? Math.max(0, Math.sin(animationClock * .024 + unit.id)) : 0
+          const back = !punching && (unit.facingBack || (unit.side === 'red' && unit.moving))
 
           // The Ultra is intentionally drawn as a chunky, readable game
           // silhouette rather than another circular unit marker.
@@ -317,24 +317,24 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
           stroke([0, -43], [3, -45], 0x3d4540, 1, .8 * opacity)
           if (back) {
             stroke([-8, -29], [8, -29], scarf, 2.5, opacity)
-            stroke([-4, -27], [0, -20], scarf, 1.5, opacity)
-            stroke([4, -27], [0, -20], scarf, 1.5, opacity)
           } else {
+            const leftEye = point(-5, -30)
+            const rightEye = point(5, -30)
+            graphics.fillStyle(0xf1dfbd, opacity)
+            graphics.fillCircle(leftEye.x, leftEye.y, 2.1 * scale)
+            graphics.fillCircle(rightEye.x, rightEye.y, 2.1 * scale)
             graphics.fillStyle(DARK, opacity)
-            graphics.fillRect(p.x - 7 * scale, p.y - 30 * scale, 4 * scale, 2 * scale)
-            graphics.fillRect(p.x + 3 * scale, p.y - 30 * scale, 4 * scale, 2 * scale)
+            graphics.fillCircle(leftEye.x, leftEye.y, .9 * scale)
+            graphics.fillCircle(rightEye.x, rightEye.y, .9 * scale)
             stroke([-7, -33], [-2, -35], 0x070f12, 1.8, opacity)
             stroke([2, -35], [7, -33], 0x070f12, 1.8, opacity)
-            stroke([-6, -25], [6, -25], 0x070f12, 2.5, opacity)
-            stroke([-3, -24], [0, -22], 0xb43d38, 1.1, opacity)
+            stroke([-6, -25], [6, -25], 0x070f12, 2.8, opacity)
+            stroke([-3, -24], [0, -22], 0xd04a3f, 1.4, opacity)
             stroke([-8, -39], [-2, -42], 0xe3b18f, 1.2, .6 * opacity)
             stroke([2, -42], [8, -39], 0xe3b18f, 1.1, .5 * opacity)
-            stroke([-10, -31], [-6, -27], 0x794936, 1.7, opacity)
-            stroke([8, -29], [5, -24], 0x794936, 1.5, opacity)
+            stroke([-10, -31], [-6, -27], 0x794936, 2.1, opacity)
+            stroke([8, -29], [5, -24], 0x794936, 1.9, opacity)
           }
-          stroke([-8, -38], [8, -38], scarf, 2, opacity)
-          stroke([-10, -36], [-13, -27], scarf, 2, opacity)
-          stroke([10, -36], [13, -27], scarf, 2, opacity)
         }
 
         const drawUnit = (unit: Game['units'][number], ghost = false) => {
