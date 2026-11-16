@@ -26,6 +26,14 @@ function loadDeck(): number[] {
   return cards.slice(0, 8).map((_, i) => i)
 }
 
+function multiplayerHealthUrl() {
+  const local = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  const renderDefault = window.location.hostname.endsWith('.onrender.com') ? 'wss://terrace-wars-multiplayer.onrender.com' : ''
+  const endpoint = import.meta.env.VITE_MULTIPLAYER_URL ||
+    (local ? `ws://${window.location.hostname}:8787` : renderDefault || `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`)
+  return `${endpoint.replace(/^ws/, 'http').replace(/\/$/, '')}/health`
+}
+
 function App() {
   const [deck, setDeck] = useState(loadDeck)
   const preview = new URLSearchParams(window.location.search).get('preview')
@@ -47,6 +55,7 @@ function App() {
   const [inviteLink, setInviteLink] = useState('')
   const [inviteQr, setInviteQr] = useState('')
   const [onlineMessage, setOnlineMessage] = useState('')
+  const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking')
   const [selected, setSelected] = useState(0)
   const [sound, setSound] = useState(true)
   const [message, setMessage] = useState('')
@@ -72,6 +81,21 @@ function App() {
   const time = Math.ceil(game.time)
   const blueScore = Number(buildingHp.redPubOne <= 0) + Number(buildingHp.redPubTwo <= 0)
   const redScore = Number(buildingHp.bluePubOne <= 0) + Number(buildingHp.bluePubTwo <= 0)
+
+  useEffect(() => {
+    if (page !== 'menu') return
+    const controller = new AbortController()
+    setServerStatus('checking')
+    fetch(multiplayerHealthUrl(), { signal: controller.signal })
+      .then(response => {
+        if (!response.ok) throw new Error('health check failed')
+        setServerStatus('online')
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setServerStatus('offline')
+      })
+    return () => controller.abort()
+  }, [page])
 
   useEffect(() => {
     const endCardDrag = (event: PointerEvent) => {
@@ -273,7 +297,10 @@ function App() {
     setOnlineMessage('')
     setPage('arena')
     const local = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    const endpoint = import.meta.env.VITE_MULTIPLAYER_URL || (local ? `ws://${window.location.hostname}:8787` : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`)
+    const renderDefault = window.location.hostname.endsWith('.onrender.com') ? 'wss://terrace-wars-multiplayer.onrender.com' : ''
+    const endpoint = import.meta.env.VITE_MULTIPLAYER_URL || (local
+      ? `ws://${window.location.hostname}:8787`
+      : renderDefault || `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`)
     const connection = new WebSocket(endpoint)
     socket.current = connection
     connection.onopen = () => {
@@ -382,6 +409,7 @@ function App() {
        <p>Siebzehn Karten. Zwei Lanes. Drei Minuten.<br />Bring deine Firm auf den Platz und hol dir das Derby.</p>
        <button className="primary" onClick={() => { setOnlineMode(null); setPage('deck') }}><Swords size={21} /> GEGEN KI SPIELEN <span>→</span></button>
        <button className="secondary multiplayer-entry" onClick={() => { setOnlineMode('matchmake'); setPage('deck') }}><Swords size={18} /> GEGNER SUCHEN</button>
+       <div className={`multiplayer-status ${serverStatus}`} role="status"><i /> MULTIPLAYER-SERVER: {serverStatus === 'checking' ? 'WIRD GEPRÜFT' : serverStatus === 'online' ? 'ONLINE' : 'OFFLINE'}</div>
        <div className="menu-facts"><span><b>01</b> Karte auswählen</span><span><b>02</b> Hool platzieren</span><span><b>03</b> Clubhaus zerstören</span></div>
        <div className="menu-crest"><span>EST. 2026</span><strong>TW</strong><Swords size={70} /><b>RIVERSIDE FIRM</b><small>ONE PITCH. ONE WINNER.</small></div>
        <div className="menu-note">Kostenloses Browser-MVP · Training gegen KI · Eigene, fiktive Vereine</div>

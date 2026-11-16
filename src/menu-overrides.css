@@ -227,6 +227,43 @@
   font-size: 7px;
 }
 
+.multiplayer-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+  color: #899775;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.multiplayer-status i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #a69d70;
+  box-shadow: 0 0 8px #a69d70aa;
+}
+
+.multiplayer-status.online {
+  color: #b7cc86;
+}
+
+.multiplayer-status.online i {
+  background: #8fd08a;
+  box-shadow: 0 0 9px #8fd08acc;
+}
+
+.multiplayer-status.offline {
+  color: #c9806c;
+}
+
+.multiplayer-status.offline i {
+  background: #d76855;
+  box-shadow: 0 0 9px #d76855aa;
+}
+
 .mobile-match-timer {
   display: none;
 }
