@@ -94,17 +94,39 @@ function makeUnits(startId: number, x: number, y: number, side: Side, lane: numb
   } satisfies Unit))
 }
 const activeUnit = (unit: Unit) => unit.hp > 0 && (unit.spawnDelay ?? 0) <= 0
-export function deploymentPoint(card: Card, x: number, y: number, side: Side = 'blue') {
+export function deploymentPoint(g: Game, card: Card, x: number, y: number, side: Side = 'blue') {
   let point = card.kind === 'building' ? snapBuildingToTile({ x, y }) : snapToTile({ x, y })
   if (card.kind === 'spell') return point
   const tile = toTile(point)
+  const enemy = side === 'blue' ? 'red' : 'blue'
+  const pub = `${enemy}Pub${tile.x < 9.5 ? 'One' : 'Two'}` as BuildingKey
+  const captured = g.hp[pub] <= 0
+  const allowed = (xTile: number, yTile: number) => side === 'blue'
+    ? yTile >= 17 || (captured && yTile >= 8 && yTile <= 14)
+    : yTile <= 14 || (captured && yTile >= 17 && yTile <= 23)
   const boundary = side === 'blue' ? 17 : 14
-  if (side === 'blue' ? tile.y < boundary : tile.y > boundary) {
+  if (!allowed(tile.x, tile.y)) {
+    const targetY = captured ? (side === 'blue' ? 8 : 23) : boundary
     point = card.kind === 'building'
-      ? snapBuildingToTile(fromTile({ x: tile.x, y: boundary }))
-      : snapToTile(fromTile({ x: tile.x, y: boundary }))
+      ? snapBuildingToTile(fromTile({ x: tile.x, y: targetY }))
+      : snapToTile(fromTile({ x: tile.x, y: targetY }))
   }
-  return point
+  if (canDeploy(g, card, point.x, point.y, side)) return point
+  let fallback: { x: number; y: number } | undefined
+  let bestDistance = Infinity
+  for (let xTile = 0; xTile < 18; xTile++) for (let yTile = 0; yTile < 32; yTile++) {
+    if (!allowed(xTile, yTile)) continue
+    const candidate = card.kind === 'building'
+      ? snapBuildingToTile(fromTile({ x: xTile, y: yTile }))
+      : snapToTile(fromTile({ x: xTile, y: yTile }))
+    if (!canDeploy(g, card, candidate.x, candidate.y, side)) continue
+    const distance = (candidate.x - point.x) ** 2 + (candidate.y - point.y) ** 2
+    if (distance < bestDistance) {
+      bestDistance = distance
+      fallback = candidate
+    }
+  }
+  return fallback ?? point
 }
 export function canDeploy(g: Game, card: Card, x: number, y: number, side: Side = 'blue') {
   if (!card || !Number.isFinite(x) || !Number.isFinite(y)) return false
