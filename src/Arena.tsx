@@ -2,6 +2,7 @@ import { memo, useEffect, useRef, useState } from 'react'
 import { buildings, canDeploy, cards, laneRoute, FLARE_FLIGHT, FLARE_INTERVAL, GATLING_INTERVAL, BEER_FLIGHT, PUDDLE_LIFETIME, TORCH_FLIGHT, FIRE_LIFETIME, BLOOD_STAIN_LIFETIME, SPELL_FLIGHT } from './game'
 import type { Card, Game, Side } from './game'
 import './pyro.css'
+import { fromTile, snapToTile, validTile } from './grid.ts'
 
 // Native vertical Clash-style camera: game X is match depth, game Y is the lane.
 // Rectangular pitch aligned to the 32px placement grid (12 columns, 26 rows).
@@ -175,7 +176,7 @@ export function Flitzer({ side = 'blue', back = side === 'blue', moving = false 
   </g>
 }
 
-function GatlingGuard({ side, throwing, aimAngle }: { side: Side; throwing: boolean; aimAngle: number }) {
+export function GatlingGuard({ side, throwing, aimAngle }: { side: Side; throwing: boolean; aimAngle: number }) {
   const radians = aimAngle * Math.PI / 180
   const back = Math.sin(radians) < 0
   const color = side === 'blue' ? '#5baaa0' : '#c46249'
@@ -204,7 +205,7 @@ function GatlingGuard({ side, throwing, aimAngle }: { side: Side; throwing: bool
   </g>
 }
 
-const Club = memo(function Club({ side, fortress, hp, max, throwing, activated, aimAngle }: { side: Side; fortress: boolean; hp: number; max: number; throwing: boolean; activated: boolean; aimAngle: number }) {
+export const Club = memo(function Club({ side, fortress, hp, max, throwing, activated, aimAngle }: { side: Side; fortress: boolean; hp: number; max: number; throwing: boolean; activated: boolean; aimAngle: number }) {
   const lastAim = useRef(aimAngle)
   if (throwing) lastAim.current = aimAngle
   const c = side === 'blue' ? '#5baaa0' : '#c46249'
@@ -247,7 +248,7 @@ const Club = memo(function Club({ side, fortress, hp, max, throwing, activated, 
    </g>
  })
 
-const BeerStall = memo(function BeerStall({ side, hp, max, kind = 'beer' }: { side: Side; hp: number; max: number; kind?: 'beer' | 'sausage' }) {
+export const BeerStall = memo(function BeerStall({ side, hp, max, kind = 'beer' }: { side: Side; hp: number; max: number; kind?: 'beer' | 'sausage' }) {
   const c = side === 'blue' ? '#5baaa0' : '#c46249'
   const sausage = kind === 'sausage'
   const health = Math.max(0, hp / max)
@@ -326,7 +327,7 @@ const VerticalEnvironment = memo(function VerticalEnvironment() {
   const p = (x: number, y: number) => baseProject(x, y)
   const points = (coords: Array<[number, number]>) => coords.map(([x, y]) => { const q = p(x, y); return `${q.x},${q.y}` }).join(' ')
   const lanePath = (lane: number, side: Side) => laneRoute(side, lane).map((q, i) => { const v = p(q.x, q.y); return `${i ? 'L' : 'M'}${v.x} ${v.y}` }).join(' ')
-  const fenceSegments: Array<[number, number]> = [[-28, 17], [29, 67], [79, 128]]
+  const fenceSegments: Array<[number, number]> = [[-28, 100 * 2 / 18], [100 * 5 / 18, 100 * 13 / 18], [100 * 16 / 18, 128]]
   return <>
     <defs>
       <pattern id="vertical-asphalt" width="9" height="9" patternUnits="userSpaceOnUse"><rect width="9" height="9" fill="#3f4939" /><path d="M1 2h.4M6 7h.7M4 5h.25" stroke="#a09b78" strokeWidth=".25" opacity=".45" /></pattern>
@@ -449,12 +450,9 @@ export function Arena({ game, selectedCard, active, dragging = false, perspectiv
     const screen = new DOMPoint(x, y).matrixTransform(matrix.inverse())
     const raw = fromScreen(screen.x, screen.y)
     if (raw.x < 0 || raw.x >= 100 || raw.y < 0 || raw.y >= 100) return null
-    const column = Math.floor((screen.x - 192) / 32)
-    const row = Math.floor((screen.y - 192) / 32)
-    const snapped = fromScreen(192 + column * 32 + 16, 192 + row * 32 + 16)
-    return snapped.x >= 0 && snapped.x < 100 && snapped.y >= 0 && snapped.y < 100 ? snapped : null
+    return snapToTile(raw)
   }
-  const cellAllowed = (x: number, y: number) => x >= 0 && x < 100 && y >= 0 && y < 100 && canDeploy(game, selectedCard, x, y)
+  const cellAllowed = (x: number, y: number) => canDeploy(game, selectedCard, x, y, perspective)
   const showPlacement = active && (dragging || draggingOver)
   const hoverAllowed = hover && cellAllowed(hover.x, hover.y)
   const groundPolygon = (x: number, y: number, size: number) => [[x, y], [x + size, y], [x + size, y + size], [x, y + size]].map(([a, b]) => { const p = project(a, b); return `${p.x},${p.y}` }).join(' ')
@@ -478,24 +476,17 @@ export function Arena({ game, selectedCard, active, dragging = false, perspectiv
       <polygon points={groundPolygon(0, 0, 100)} fill="none" stroke="#e4d6a5" strokeWidth="2.5" strokeDasharray="10 5" />
       <defs><clipPath id="placement-grid-clip"><polygon points={groundPolygon(0, 0, 100)} /></clipPath></defs>
       <g clipPath="url(#placement-grid-clip)">
-      {showPlacement && Array.from({ length: 480 }, (_, i) => {
-        const x = 128 + (i % 16) * 32
-        const y = 128 + Math.floor(i / 16) * 32
-        const center = fromScreen(x + 16, y + 16)
-        const allowed = cellAllowed(center.x, center.y)
-        const corners = [[x, y], [x + 32, y], [x + 32, y + 32], [x, y + 32]]
-        return <g key={i}>
-          <rect x={x} y={y} width="32" height="32" fill={allowed ? '#64d6af' : '#c45142'} fillOpacity={allowed ? .06 : .1} stroke={allowed ? '#a0dec2' : '#b87667'} strokeOpacity=".38" strokeWidth=".7" />
-          {allowed && [[0, -32], [32, 0], [0, 32], [-32, 0]].map(([dx, dy], edge) => {
-            const neighbor = fromScreen(x + 16 + dx, y + 16 + dy)
-            if (cellAllowed(neighbor.x, neighbor.y)) return null
-            const a = { x: corners[edge][0], y: corners[edge][1] }
-            const b = { x: corners[(edge + 1) % 4][0], y: corners[(edge + 1) % 4][1] }
-            return <line key={edge} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#95f3c8" strokeWidth="2.5" />
-          })}
-        </g>
+       {showPlacement && Array.from({ length: 576 }, (_, i) => {
+         const tx = 1 + i % 18, ty = Math.floor(i / 18)
+         if (!validTile(tx, ty)) return null
+         const center = fromTile({ x: tx, y: ty })
+         const p = project(center.x, center.y)
+         const width = 384 / 18, height = 832 / 32
+         const x = p.x - width / 2, y = p.y - height / 2
+         const allowed = cellAllowed(center.x, center.y)
+         return <rect key={i} x={x} y={y} width={width} height={height} fill={allowed ? '#64d6af' : '#c45142'} fillOpacity={allowed ? .06 : .1} stroke={allowed ? '#a0dec2' : '#b87667'} strokeOpacity=".38" strokeWidth=".7" />
       })}
-      {showPlacement && hover && <rect x={project(hover.x, hover.y).x - 16} y={project(hover.x, hover.y).y - 16 - (mobileLayout ? 32 : 0)} width="32" height="32" fill={hoverAllowed ? '#82f4c0' : '#ef6354'} fillOpacity=".35" stroke={hoverAllowed ? '#e1ffe9' : '#ff9788'} strokeWidth="3" />}
+       {showPlacement && hover && <rect x={project(hover.x, hover.y).x - 384 / 36} y={project(hover.x, hover.y).y - 832 / 64} width={384 / 18} height={832 / 32} fill={hoverAllowed ? '#82f4c0' : '#ef6354'} fillOpacity=".35" stroke={hoverAllowed ? '#e1ffe9' : '#ff9788'} strokeWidth="3" />}
       </g>
     </g>
     <g pointerEvents="none" className="beer-puddles">{game.puddles.map(puddle => {

@@ -4,6 +4,7 @@ import QRCode from 'qrcode'
 import { Flame, Heart, Pause, Play, RotateCcw, Shield, Swords, Trophy, Volume2, VolumeX, Zap } from 'lucide-react'
 import { canDeploy, cards, deploy, newGame, tick } from './game'
 import { Arena, Fan, Flitzer } from './Arena'
+import { PhaserArena } from './PhaserArena'
 import type { Card, Game, Side } from './game'
 import './styles.css'
 import './figures.css'
@@ -26,6 +27,7 @@ function loadDeck(): number[] {
 function App() {
   const [deck, setDeck] = useState(loadDeck)
   const preview = new URLSearchParams(window.location.search).get('preview')
+  const usePhaserArena = new URLSearchParams(window.location.search).get('renderer') !== 'svg'
   const initialMatch = new URLSearchParams(window.location.search).get('match')
   const [game, setGame] = useState(() => {
     const initial = newGame(deck)
@@ -376,7 +378,9 @@ function App() {
              <div className="countdown-subtitle">{countdown === 'go' ? 'DAS DERBY LÄUFT' : 'BEREIT MACHEN'}</div>
            </div>}
            <div className="arena-topline"><span><i /> LIVE FROM THE DOCKS</span><span>RIVERSIDE <b>{blueScore} : {redScore}</b> KIEZ</span><span>23:47 · FLUTLICHT</span></div>
-           <Arena game={game} selectedCard={selectedCard} perspective={onlineRole} active={running && !game.result} dragging={draggingCard} onPlace={(x, y, drop) => { place(x, y, drop ? dragged.current ?? selected : selected); dragged.current = null; setDraggingCard(false) }} />
+           {usePhaserArena
+             ? <PhaserArena game={game} selectedCard={selectedCard} dragging={draggingCard} perspective={onlineRole} active={running && !game.result} onPlace={(x, y, drop) => { place(x, y, drop ? dragged.current ?? selected : selected); dragged.current = null; setDraggingCard(false) }} />
+             : <Arena game={game} selectedCard={selectedCard} perspective={onlineRole} active={running && !game.result} dragging={draggingCard} onPlace={(x, y, drop) => { place(x, y, drop ? dragged.current ?? selected : selected); dragged.current = null; setDraggingCard(false) }} />}
           <div className="arena-bottomline"><span>HOME END <b>↗</b></span><span>BETON. RAUCH. RIVALITÄT.</span><span><b>↙</b> AWAY END</span></div>
             {countdown === null && (!running || game.result) && (game.result ? <div className={`match-overlay result-overlay ${game.result === 'DERBYSIEG!' ? 'result-win' : 'result-loss'}`}>
              <div className="result-kicker">{game.result === 'DERBYSIEG!' ? 'DIE KURVE DREHT DURCH' : 'DER BLOCK IST GEFALLEN'}</div>

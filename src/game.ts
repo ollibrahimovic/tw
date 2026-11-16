@@ -1,12 +1,13 @@
 export type Card = { name: string; role: string; cost: number; icon: string; color: string; damage: number; hp: number; speed: number; range: number; rate: number; rarity: string; kind?: 'unit' | 'spell' | 'building'; hidden?: boolean }
+import { fromTile, toTile, snapToTile, validTile, walkablePoint, tileDistance, TILE_BUILDINGS, rectCenter, insideRect } from './grid.ts'
+import type { TileRect } from './grid.ts'
 export type Side = 'blue' | 'red'
 export type Unit = { id: number; lane: number; x: number; y: number; side: Side; card: Card; hp: number; cooldown: number; routeIndex: number; targetId?: number; moving: boolean; facingBack: boolean; lateralOffset?: number }
 export type Structure = { id: number; x: number; y: number; side: Side; card: Card; hp: number; max: number; cooldown: number; age: number }
 export function laneRoute(side: Side, lane: number) {
-  const bridgeY = lane === 0 ? 22 : 74
-  const pubY = lane === 0 ? 13 : 83
-  return [{ x: 44, y: bridgeY }, { x: 58, y: bridgeY }, { x: 68, y: pubY }, { x: 76, y: pubY }, { x: 82, y: pubY }, { x: 95, y: 50 }]
-    .map(p => ({ x: side === 'blue' ? p.x : 100 - p.x, y: p.y }))
+  const x = lane === 0 ? 4 : 15
+  return [{ x, y: 18 }, { x, y: 13 }, { x, y: 9.5 }, { x, y: 6 }, { x, y: 4 }, { x: 9.5, y: 2.5 }]
+    .map(p => fromTile({ x: p.x, y: side === 'blue' ? p.y : 31 - p.y }))
 }
 export type Flare = { id: number; source: BuildingKey; side: Side; target: number; x: number; y: number; age: number }
 export const FLARE_FLIGHT = .65
@@ -62,12 +63,12 @@ export const cards: Card[] = [
 export const AI_DECK = [0, 2, 3, 5, 7, 9, 16, 19]
 export type BuildingKey = 'blueFortress' | 'redFortress' | 'bluePubOne' | 'bluePubTwo' | 'redPubOne' | 'redPubTwo'
 export const buildings: { key: BuildingKey; side: Side; x: number; y: number; max: number }[] = [
-  { key: 'blueFortress', side: 'blue', x: 5, y: 50, max: 3000 },
-  { key: 'redFortress', side: 'red', x: 95, y: 50, max: 3000 },
-  { key: 'bluePubOne', side: 'blue', x: 24, y: 13, max: 1200 },
-  { key: 'bluePubTwo', side: 'blue', x: 24, y: 83, max: 1200 },
-  { key: 'redPubOne', side: 'red', x: 76, y: 13, max: 1200 },
-  { key: 'redPubTwo', side: 'red', x: 76, y: 83, max: 1200 },
+  { key: 'blueFortress', side: 'blue', ...rectCenter(TILE_BUILDINGS.blueFortress), max: 3000 },
+  { key: 'redFortress', side: 'red', ...rectCenter(TILE_BUILDINGS.redFortress), max: 3000 },
+  { key: 'bluePubOne', side: 'blue', ...rectCenter(TILE_BUILDINGS.bluePubOne), max: 1200 },
+  { key: 'bluePubTwo', side: 'blue', ...rectCenter(TILE_BUILDINGS.bluePubTwo), max: 1200 },
+  { key: 'redPubOne', side: 'red', ...rectCenter(TILE_BUILDINGS.redPubOne), max: 1200 },
+  { key: 'redPubTwo', side: 'red', ...rectCenter(TILE_BUILDINGS.redPubTwo), max: 1200 },
 ]
 export type Game = { time: number; hype: number; redHype: number; aiHype: number; aiClock: number; aiDeck: number[]; multiplayer: boolean; units: Unit[]; structures: Structure[]; hp: Record<BuildingKey, number>; queue: number[]; redQueue: number[]; id: number; result: string | null; log: string[]; shots: number; totalDamage: number; damageEvents: DamageEvent[]; flares: Flare[]; impacts: { id: number; x: number; y: number; age: number }[]; blood: { id: number; x: number; y: number; age: number }[]; bloodStains: { id: number; x: number; y: number; age: number }[]; spells: Spell[]; buildingCooldown: Record<BuildingKey, number>; beers: Beer[]; puddles: { id: number; x: number; y: number; age: number }[]; torches: Torch[]; fires: { id: number; x: number; y: number; age: number }[] }
 export function newGame(deck: number[], aiDeck = AI_DECK, multiplayer = false, redDeck = aiDeck): Game {
@@ -81,14 +82,29 @@ function makeUnits(startId: number, x: number, y: number, side: Side, lane: numb
   return offsets.map((offset, index) => ({ id: startId + index, x, y: Math.max(4, Math.min(96, y + offset)), lane, card, side, hp: card.hp, cooldown: 0, routeIndex, moving: false, facingBack: false } satisfies Unit))
 }
 export function canDeploy(g: Game, card: Card, x: number, y: number, side: Side = 'blue') {
-  if (!card || x < 0 || x > 100 || y < 0 || y > 100) return false
+  if (!card || !Number.isFinite(x) || !Number.isFinite(y)) return false
+  const snapped = snapToTile({ x, y })
+  const tile = toTile(snapped)
+  if (!validTile(Math.round(tile.x), Math.round(tile.y))) return false
+  x = snapped.x
+  y = snapped.y
   if (card.kind === 'spell') return true
-  if (card.kind === 'building') return side === 'blue' ? x < 45 : x > 55
-  if (side === 'red') return x > 55
-  const lane = y < 49 ? 'redPubOne' : 'redPubTwo'
-  return x < 45 || (x > 58 && x < 76 && g.hp[lane] <= 0)
+  if (!walkablePoint(snapped) || (tile.y >= 15 && tile.y <= 16)) return false
+  const clearance = card.kind === 'building' ? .5 : 0
+  if (solidBuildings(g).some(b => insideRect(snapped, b.rect, clearance))) return false
+  if (card.kind === 'building') {
+    if (![-.49, .49].every(dx => [-.49, .49].every(dy => walkablePoint(fromTile({ x: tile.x + dx, y: tile.y + dy }))))) return false
+  }
+  const enemy = side === 'blue' ? 'red' : 'blue'
+  const pub = `${enemy}Pub${tile.x < 9.5 ? 'One' : 'Two'}` as BuildingKey
+  const ownHalf = side === 'blue' ? tile.y >= 17 : tile.y <= 14
+  const captured = g.hp[pub] <= 0 && (side === 'blue' ? tile.y >= 8 && tile.y <= 14 : tile.y >= 17 && tile.y <= 23)
+  return ownHalf || (card.kind !== 'building' && captured)
 }
 export function deploy(g: Game, slot: number, x: number, y: number, side: Side = 'blue'): Game {
+  const snapped = snapToTile({ x, y })
+  x = snapped.x
+  y = snapped.y
   const queueKey = side === 'blue' ? 'queue' : 'redQueue'
   const hypeKey = side === 'blue' ? 'hype' : 'redHype'
   const queue = [...g[queueKey]]
@@ -103,9 +119,63 @@ export function deploy(g: Game, slot: number, x: number, y: number, side: Side =
     return { ...update, structures: [...g.structures, structure] }
   }
   const units = makeUnits(g.id, x, y, side, y < 49 ? 0 : 1, card)
+  const solids = solidBuildings(g)
+  for (const unit of units) resolveBuildings(unit, solids)
   return { ...update, id: g.id + units.length, units: [...g.units, ...units] }
 }
-const distance = (a: {x: number; y: number}, b: {x: number; y: number}) => Math.hypot(a.x - b.x, a.y - b.y)
+// Legacy balance values convert at 3.125 units/tile; both axes use the same tile metric.
+const distance = (a: {x: number; y: number}, b: {x: number; y: number}) => tileDistance(a, b) * 100 / 32
+type Solid = { x: number; y: number; radius: number; rect: TileRect }
+// Ground footprints include a small unit clearance, not the roof/sprite height.
+export function solidBuildings(g: Game): Solid[] {
+  return [
+    ...buildings.filter(b => g.hp[b.key] > 0).map(b => ({
+      x: b.x, y: b.y, radius: b.key.includes('Fortress') ? 9 : 7, rect: TILE_BUILDINGS[b.key],
+    })),
+    ...g.structures.filter(s => s.hp > 0).map(s => {
+      const p = toTile(s)
+      return { x: s.x, y: s.y, radius: 3.5, rect: { left: p.x, right: p.x, top: p.y, bottom: p.y } }
+    }),
+  ]
+}
+
+function resolveBuildings(u: Unit, solids: Solid[]) {
+  for (let pass = 0; pass < 4; pass++) for (const b of solids) {
+    if (!insideRect(u, b.rect, .18)) continue
+    const p = toTile(u)
+    const edges = [
+      { x: b.rect.left - .681, y: p.y }, { x: b.rect.right + .681, y: p.y },
+      { x: p.x, y: b.rect.top - .681 }, { x: p.x, y: b.rect.bottom + .681 },
+    ].filter(t => walkablePoint(fromTile(t)))
+    edges.sort((a, c) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(c.x - p.x, c.y - p.y))
+    if (edges[0]) Object.assign(u, fromTile(edges[0]))
+  }
+}
+
+function avoidBuildings(u: Unit, goal: { x: number; y: number }, solids: Solid[]) {
+  const start = toTile(u), end = toTile(goal)
+  const dx = end.x - start.x
+  const dy = end.y - start.y
+  const length = Math.hypot(dx, dy)
+  if (length < .001) return goal
+  const blocked = solids.map(b => {
+    const p = toTile(b)
+    const radius = Math.hypot((b.rect.right - b.rect.left + 1) / 2, (b.rect.bottom - b.rect.top + 1) / 2) + .25
+    const t = Math.max(0, Math.min(1, ((p.x - start.x) * dx + (p.y - start.y) * dy) / (length * length)))
+    return { b, p, radius, t, gap: Math.hypot(start.x + dx * t - p.x, start.y + dy * t - p.y) }
+  }).filter(({ b, radius, t, gap }) => t > 0 && gap < radius && !insideRect(goal, b.rect, .2))
+    .sort((a, b) => a.t - b.t)[0]
+  if (!blocked) return goal
+  const b = blocked.p
+  const radius = blocked.radius + .4
+  // Pick a side of the footprint perpendicular to the intended travel direction.
+  const options = [-1, 1].map(sign => ({
+    x: b.x - dy / length * radius * sign,
+    y: b.y + dx / length * radius * sign,
+  })).map(fromTile).filter(walkablePoint)
+  options.sort((a, b) => distance(u, a) + distance(a, goal) - distance(u, b) - distance(b, goal))
+  return options[0] ?? goal
+}
 const recordDamage = (g: Game, point: { x: number; y: number }, amount: number, kind: DamageEvent['kind']) => {
   if (amount > 0) { g.totalDamage += amount; g.damageEvents.push({ id: g.id++, x: point.x, y: point.y, amount, kind, age: 0 }) }
 }
@@ -130,8 +200,10 @@ function separateUnits(units: Unit[]) {
         if (a.side !== b.side && d > 2.8 && (a.card.name === 'Flitzer' || b.card.name === 'Flitzer') && (a.targetId === b.id || b.targetId === a.id)) continue
         const side = a.id < b.id ? -1 : 1
         const amount = (UNIT_COLLISION_DISTANCE - d) * .28
-        a.y = Math.max(4, Math.min(96, a.y + side * amount))
-        b.y = Math.max(4, Math.min(96, b.y - side * amount))
+        const ay = a.y + side * amount
+        const by = b.y - side * amount
+        if (walkablePoint({ x: a.x, y: ay })) a.y = ay
+        if (walkablePoint({ x: b.x, y: by })) b.y = by
         const offset = Math.min(3.8, Math.max(.45, (UNIT_COLLISION_DISTANCE - d) * .55))
         a.lateralOffset = Math.max(-4, Math.min(4, (a.lateralOffset ?? 0) + side * offset))
         b.lateralOffset = Math.max(-4, Math.min(4, (b.lateralOffset ?? 0) - side * offset))
@@ -143,15 +215,11 @@ function separateUnits(units: Unit[]) {
 }
 // Pursuit may leave a lane, but must still use a bridge to cross the canal.
 function pursuitWaypoint(u: Unit, target: Unit) {
-  const minX = Math.max(44, Math.min(u.x, target.x))
-  const maxX = Math.min(56, Math.max(u.x, target.x))
-  if (minX > maxX || Math.abs(target.x - u.x) < .001) return target
-  const yAt = (x: number) => u.y + (target.y - u.y) * (x - u.x) / (target.x - u.x)
-  if ([22, 74].some(y => Math.abs(yAt(minX) - y) <= 3.5 && Math.abs(yAt(maxX) - y) <= 3.5)) return target
-  const bridgeY = u.lane === 0 ? 22 : 74
-  const rightward = target.x > u.x
-  if (u.x >= 42 && u.x <= 58 && Math.abs(u.y - bridgeY) < .1) return { x: rightward ? 58 : 42, y: bridgeY }
-  return { x: u.x < 50 ? 42 : 58, y: bridgeY }
+  const a = toTile(u), b = toTile(target)
+  if ((a.y < 14.5 && b.y < 14.5) || (a.y > 16.5 && b.y > 16.5)) return target
+  const bridge = u.lane === 0 ? 4 : 15
+  if (Math.abs(a.x - bridge) < .2) return fromTile({ x: bridge, y: b.y < a.y ? 13 : 18 })
+  return fromTile({ x: bridge, y: a.y < 15.5 ? 13 : 18 })
 }
 export function tick(previous: Game, dt: number, random = Math.random): Game {
   if (previous.result) return previous
@@ -244,9 +312,11 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
           const target = enemy ?? fallback
           g.spells.push({ id: g.id++, type, side: 'red', x: target.x, y: target.y, fromX: 95, fromY: 50, age: 0 })
         } else if (card.kind === 'building') {
-          g.structures.push({ id: g.id++, x: 79, y: laneRoute('red', lane)[0].y, side: 'red', card, hp: card.hp, max: card.hp, cooldown: 0, age: 0 })
+          const p = fromTile({ x: lane === 0 ? 7 : 12, y: 10 })
+          if (canDeploy(g, card, p.x, p.y, 'red')) g.structures.push({ id: g.id++, ...p, side: 'red', card, hp: card.hp, max: card.hp, cooldown: 0, age: 0 })
         } else {
-          const units = makeUnits(g.id, 79, laneRoute('red', lane)[0].y, 'red', lane, card)
+          const p = fromTile({ x: lane === 0 ? 4 : 15, y: 10 })
+          const units = makeUnits(g.id, p.x, p.y, 'red', lane, card)
          g.units.push(...units)
          g.id += units.length
        }
@@ -319,7 +389,10 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
     } else {
       const route = laneRoute(u.side, u.lane)
       const rawWaypoint = target ? pursuitWaypoint(u, target) : structureTarget ? structureTarget : route[u.routeIndex]
-      const waypoint = target ? rawWaypoint : { x: rawWaypoint.x, y: rawWaypoint.y + (u.lateralOffset ?? 0) }
+      const routeWaypoint = target ? rawWaypoint : { x: rawWaypoint.x, y: rawWaypoint.y + (u.lateralOffset ?? 0) }
+      const solids = solidBuildings(g)
+      resolveBuildings(u, solids)
+      const waypoint = avoidBuildings(u, routeWaypoint, solids)
       const d = distance(u, waypoint)
      const smokeSlowed = g.spells.some(s => s.type === 'smoke' && s.side !== u.side && distance(u, s) < SMOKE_RADIUS)
      const beerSlowed = g.spells.some(s => s.type === 'beer-shower' && s.side !== u.side && distance(u, s) < 18)
@@ -327,15 +400,25 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
         const movement = Math.min(d, u.card.speed * MOVEMENT_SPEED_FACTOR * dt * (smokeSlowed ? .24 : slowed ? .5 : 1))
        if (d) {
          const dx = (waypoint.x - u.x) / d
-         u.x += dx * movement
-         u.y += (waypoint.y - u.y) / d * movement
+         const dy = (waypoint.y - u.y) / d
+          // Substeps prevent fast units or a long tick tunnelling through a footprint.
+          const steps = Math.max(1, Math.ceil(movement / .75))
+          for (let step = 0; step < steps; step++) {
+            const next = { x: u.x + dx * movement / steps, y: u.y + dy * movement / steps }
+            if (walkablePoint(next)) Object.assign(u, next)
+            else if (walkablePoint({ x: u.x, y: next.y })) u.y = next.y
+            else if (walkablePoint({ x: next.x, y: u.y })) u.x = next.x
+            resolveBuildings(u, solids)
+          }
          u.moving = movement > .001
-         if (u.moving) u.facingBack = dx > .08
+          if (u.moving) u.facingBack = u.side === 'blue' ? dx > .08 : dx < -.08
        }
-       if (!pointTarget && movement >= d && u.routeIndex < route.length - 1) u.routeIndex++
+        if (!pointTarget && distance(u, routeWaypoint) < .0001 && u.routeIndex < route.length - 1) u.routeIndex++
     }
   }
   separateUnits(g.units)
+  const solids = solidBuildings(g)
+  for (const u of g.units) if (u.hp > 0) resolveBuildings(u, solids)
   for (const b of buildings) {
     g.buildingCooldown[b.key] = Math.max(0, g.buildingCooldown[b.key] - dt)
     if (g.hp[b.key] <= 0) continue
