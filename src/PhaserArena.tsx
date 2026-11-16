@@ -119,6 +119,32 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
             line({ x: m.left, y }, { x: m.left + m.pitchWidth, y }, 0x17251b, 1, .22)
           }
 
+          // Two shared Clash-style lanes. They start at the clubhouses, pass
+          // through the pubs, bend toward the matching fence opening, and
+          // continue symmetrically into the opponent's half.
+          for (const lane of [0, 1]) {
+            const pubY = lane === 0 ? 13 : 83
+            const bridgeY = lane === 0 ? 22 : 74
+            const points = [
+              toScreen(5, 50),
+              toScreen(14, 50),
+              toScreen(24, pubY),
+              toScreen(34, pubY),
+              toScreen(44, bridgeY),
+              toScreen(58, bridgeY),
+              toScreen(68, pubY),
+              toScreen(76, pubY),
+              toScreen(86, pubY),
+              toScreen(95, 50),
+            ]
+            line(points[0], points[1], 0x172018, 25, .95)
+            for (let i = 1; i < points.length; i++) {
+              line(points[i - 1], points[i], 0x172018, 25, .95)
+              line(points[i - 1], points[i], lane === 0 ? 0x849d77 : 0x907964, 18, .9)
+              line(points[i - 1], points[i], 0xd0c18e, 1.2, .8)
+            }
+          }
+
           const fenceY = m.top + m.pitchHeight * .5
           const openings = [22, 74].map(lane => m.left + m.pitchWidth * lane / 100)
           const openingWidth = Math.max(34, m.pitchWidth * .1)
@@ -141,12 +167,6 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
             }
           }
 
-          for (const laneY of [13, 22, 74, 83]) {
-            const start = toScreen(100, laneY)
-            const end = toScreen(0, laneY)
-            line(start, end, 0x172018, 18, .9)
-            line(start, end, laneY < 50 ? 0x849d77 : 0x907964, 11, .8)
-          }
         }
 
         const drawBuilding = (building: typeof buildings[number]) => {
