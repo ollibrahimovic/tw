@@ -268,24 +268,28 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
 
           // Shoulders, raised arms and clenched fists.
           shape([
-            [-10, -18], [-18, -12 + armSwing], [-21, -3 + armSwing],
-            [-16, -1 + armSwing], [-10, -10],
-          ], 0x343d3c, opacity)
+            [-12, -19], [-21, -12 + armSwing], [-23, -3 + armSwing],
+            [-18, -1 + armSwing], [-11, -10],
+          ], skin, opacity)
           shape([
-            [10, -18], [18 + punch * 9, -12 - armSwing], [21 + punch * 13, -3 - armSwing],
-            [16 + punch * 10, -1 - armSwing], [10, -10],
-          ], 0x343d3c, opacity)
+            [12, -19], [21 + punch * 9, -12 - armSwing], [24 + punch * 13, -3 - armSwing],
+            [18 + punch * 10, -1 - armSwing], [11, -10],
+          ], skin, opacity)
+          stroke([-17, -7 + armSwing], [-20, -2 + armSwing], 0x8b5948, 1.2, opacity)
+          stroke([17 + punch * 8, -7 - armSwing], [21 + punch * 11, -2 - armSwing], 0x8b5948, 1.2, opacity)
           graphics.fillStyle(skin, opacity)
           const leftFist = point(-19, -2 + armSwing)
           const rightFist = point(19 + punch * 13, -2 - armSwing)
           graphics.fillCircle(leftFist.x, leftFist.y, 4 * scale)
           graphics.fillCircle(rightFist.x, rightFist.y, 4 * scale)
 
-          // Dark fan jacket with the team scarf across the chest.
+          // Athletic sleeveless vest with broad shoulders and a narrow waist.
           shape([
-            [-12, -19], [-7, -24], [7, -24], [12, -18],
-            [10, 6], [0, 10], [-11, 6],
+            [-13, -19], [-8, -25], [8, -25], [13, -19],
+            [9, 7], [0, 11], [-10, 7],
           ], jersey, opacity)
+          stroke([-9, -19], [-6, -12], skin, 2.2, opacity)
+          stroke([9, -19], [6, -12], skin, 2.2, opacity)
           graphics.fillStyle(scarf, opacity)
           graphics.fillRect(p.x - 11 * scale, p.y - 13 * scale, 22 * scale, 6 * scale)
           graphics.fillStyle(0xd0c18e, .8 * opacity)
@@ -299,19 +303,21 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
             stroke([-5, -3], [5, -3], 0x93958a, 1, .65 * opacity)
           }
 
-          // Hood/balaclava and the exposed eyes make the character readable
-          // even when several Ultras are deployed together.
-          graphics.fillStyle(0x182226, opacity)
+          // Bald, scarred head. The bare scalp is brighter than the vest.
+          graphics.fillStyle(skin, opacity)
           graphics.fillCircle(p.x, p.y - 31 * scale, 13 * scale)
+          graphics.lineStyle(1.5 * scale, DARK, opacity)
+          graphics.strokeCircle(p.x, p.y - 31 * scale, 13 * scale)
+          stroke([-8, -39], [-2, -43], 0xe3b18f, 1.4, .65 * opacity)
+          stroke([2, -43], [8, -39], 0xe3b18f, 1.2, .55 * opacity)
           if (back) {
-            stroke([-9, -36], [0, -41], 0x56605c, 1.2, opacity)
-            stroke([0, -41], [9, -36], 0x56605c, 1.2, opacity)
+            stroke([-8, -34], [-3, -29], 0x794936, 1.8, opacity)
+            stroke([5, -36], [1, -29], 0x794936, 1.5, opacity)
+            stroke([-5, -40], [4, -42], 0xe8bb98, 1.2, .7 * opacity)
             stroke([-8, -29], [8, -29], scarf, 2.5, opacity)
             stroke([-4, -27], [0, -20], scarf, 1.5, opacity)
             stroke([4, -27], [0, -20], scarf, 1.5, opacity)
           } else {
-            graphics.fillStyle(skin, opacity)
-            graphics.fillRoundedRect(p.x - 10 * scale, p.y - 32 * scale, 20 * scale, 9 * scale, 3 * scale)
             graphics.fillStyle(DARK, opacity)
             graphics.fillRect(p.x - 7 * scale, p.y - 30 * scale, 4 * scale, 2 * scale)
             graphics.fillRect(p.x + 3 * scale, p.y - 30 * scale, 4 * scale, 2 * scale)
@@ -319,6 +325,8 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
             stroke([2, -35], [7, -33], 0x070f12, 1.8, opacity)
             stroke([-6, -25], [6, -25], 0x070f12, 2.5, opacity)
             stroke([-3, -24], [0, -22], 0xb43d38, 1.1, opacity)
+            stroke([-10, -31], [-6, -27], 0x794936, 1.7, opacity)
+            stroke([8, -29], [5, -24], 0x794936, 1.5, opacity)
           }
           stroke([-8, -38], [8, -38], scarf, 2, opacity)
           stroke([-10, -36], [-13, -27], scarf, 2, opacity)
