@@ -42,16 +42,20 @@ function multiplayerSocketUrl() {
 
 function checkMultiplayerSocket(signal: AbortSignal) {
   return new Promise<boolean>(resolve => {
+    if (signal.aborted) { resolve(false); return }
     const socket = new WebSocket(multiplayerSocketUrl())
     let settled = false
+    const timeout = window.setTimeout(() => finish(false), 60000)
     const finish = (online: boolean) => {
       if (settled) return
       settled = true
+      window.clearTimeout(timeout)
       socket.close()
       resolve(online)
     }
     socket.onopen = () => finish(true)
     socket.onerror = () => finish(false)
+    socket.onclose = () => finish(false)
     signal.addEventListener('abort', () => finish(false), { once: true })
   })
 }
@@ -94,7 +98,11 @@ function App() {
   const seenImpactIds = useRef(new Set<number>())
   const previousStructureIds = useRef(new Set<number>())
   const previousBuildingHp = useRef({ ...game.hp })
-  const { hp: buildingHp } = game
+  const buildingHp = onlineRole === 'blue' ? game.hp : {
+    blueFortress: game.hp.redFortress, redFortress: game.hp.blueFortress,
+    bluePubOne: game.hp.redPubOne, bluePubTwo: game.hp.redPubTwo,
+    redPubOne: game.hp.bluePubOne, redPubTwo: game.hp.bluePubTwo,
+  }
   const myQueue = onlineRole === 'red' ? game.redQueue : game.queue
   const hype = onlineRole === 'red' ? game.redHype : game.hype
   const selectedCard = cards[myQueue[selected]]
@@ -105,20 +113,21 @@ function App() {
   const redScore = Number(buildingHp.bluePubOne <= 0) + Number(buildingHp.bluePubTwo <= 0)
 
   useEffect(() => {
+    if (page !== 'arena') return
+    return () => {
+      const connection = socket.current
+      socket.current = null
+      connection?.close()
+    }
+  }, [page])
+
+  useEffect(() => {
     if (page !== 'menu') return
     const controller = new AbortController()
     setServerStatus('checking')
-    fetch(multiplayerHealthUrl(), { signal: controller.signal })
-      .then(response => {
-        if (!response.ok) throw new Error('health check failed')
-        setServerStatus('online')
-      })
-      .catch(() => {
-        if (controller.signal.aborted) return
-        void checkMultiplayerSocket(controller.signal).then(online => {
-          if (!controller.signal.aborted) setServerStatus(online ? 'online' : 'offline')
-        })
-      })
+    void checkMultiplayerSocket(controller.signal).then(online => {
+      if (!controller.signal.aborted) setServerStatus(online ? 'online' : 'offline')
+    })
     return () => controller.abort()
   }, [page])
 
@@ -327,16 +336,46 @@ function App() {
       ? `ws://${window.location.hostname}:8787`
       : renderDefault || `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`)
     const connection = new WebSocket(endpoint)
+    let assignedSide: Side = 'blue'
+    const localResult = (state: Game): Game => assignedSide === 'red' ? {
+      ...state,
+      result: state.result === 'DERBYSIEG!' ? 'NIEDERLAGE'
+        : state.result === 'NIEDERLAGE' ? 'DERBYSIEG!' : state.result,
+    } : state
+    socket.current?.close()
     socket.current = connection
+    let completed = false
+    let timeout: number
+    const fail = (reason: string) => {
+      window.clearTimeout(timeout)
+      if (socket.current !== connection || completed) return
+      completed = true
+      setOnlineMessage(reason)
+      setRunning(false)
+      setCountdown(null)
+      setOnlineStatus('connecting')
+      connection.close()
+    }
+    const waitFor = (milliseconds: number, reason: string) => {
+      window.clearTimeout(timeout)
+      timeout = window.setTimeout(() => fail(reason), milliseconds)
+    }
+    waitFor(60000, 'Verbindung fehlgeschlagen: Der Multiplayer-Server antwortet nicht. Bitte abbrechen und erneut versuchen.')
     connection.onopen = () => {
+      if (socket.current !== connection) return
+      waitFor(15000, 'Der Server ist erreichbar, bestätigt die Suche aber nicht. Bitte den Multiplayer-Service auf den aktuellen main-Stand deployen.')
       const code = new URLSearchParams(window.location.search).get('match')
-      connection.send(JSON.stringify(code
+      connection.send(JSON.stringify(onlineMode === 'join' && code
         ? { type: 'join', code, deck }
         : onlineMode === 'matchmake' ? { type: 'matchmake', deck } : { type: 'create', deck }))
     }
     connection.onmessage = event => {
+      if (socket.current !== connection || completed) return
       const message = JSON.parse(event.data) as { type: string; state?: Game; role?: Side; code?: string; invite?: string; waiting?: boolean; message?: string; reason?: string }
       if (message.type === 'room') {
+        waitFor(message.waiting ? 120000 : 15000, message.waiting
+          ? 'Innerhalb von zwei Minuten wurde kein Gegner gefunden. Bitte abbrechen und erneut suchen.'
+          : 'Der Spielstart wurde vom Server nicht bestätigt. Bitte erneut versuchen.')
         setOnlineRole(message.role || 'blue')
         const invite = message.invite || `/?match=${message.code}`
         const fullInvite = invite.startsWith('http') ? invite : `${window.location.origin}${invite}`
@@ -346,19 +385,21 @@ function App() {
         return
       }
       if (message.type === 'match-start' && message.state) {
+        window.clearTimeout(timeout)
+        assignedSide = message.role || 'blue'
         setOnlineRole(message.role || 'blue')
-        setGame(message.state)
+        setGame(localResult(message.state))
         setOnlineStatus('playing')
         setCountdown(3)
         return
       }
-      if (message.type === 'state' && message.state) setGame(message.state)
+      if (message.type === 'state' && message.state) setGame(localResult(message.state))
       if (message.type === 'opponent-joined') setOnlineMessage('Gegner ist beigetreten. Derby startet …')
-      if (message.type === 'error') setOnlineMessage(message.message || 'Multiplayer-Verbindung fehlgeschlagen.')
-      if (message.type === 'room-closed') { setOnlineStatus('offline'); setRunning(false); setOnlineMessage(message.reason || 'Der Gegner hat das Spiel verlassen.') }
+      if (message.type === 'error') fail(message.message || 'Multiplayer-Verbindung fehlgeschlagen.')
+      if (message.type === 'room-closed') fail(message.reason || 'Der Gegner hat das Spiel verlassen.')
     }
-    connection.onerror = () => setOnlineMessage('Server nicht erreichbar. Starte zuerst den Multiplayer-Server.')
-    connection.onclose = () => { if (onlineStatus !== 'playing') setOnlineStatus('offline') }
+    connection.onerror = () => fail('Der Multiplayer-Server ist nicht erreichbar. Bitte abbrechen und erneut versuchen.')
+    connection.onclose = () => fail('Die Verbindung zum Multiplayer-Server wurde geschlossen. Bitte erneut versuchen.')
   }
   function start() {
     if (deck.length !== 8) {
@@ -373,6 +414,7 @@ function App() {
     if (!audio.current) audio.current = new AudioContext()
     void audio.current.resume()
     const freshGame = newGame(deck)
+    setOnlineRole('blue')
     seenSpellIds.current.clear()
     seenImpactIds.current.clear()
     previousStructureIds.current.clear()
@@ -449,7 +491,7 @@ function App() {
         <div className="mobile-match-timer" aria-label="Verbleibende Spielzeit">{Math.floor(time / 60).toString().padStart(2, '0')}:{(time % 60).toString().padStart(2, '0')}</div>
        <div className="heading-row"><div><div className="eyebrow"><span className="live-dot" /> TRAINING · GEGEN KI</div><h1>Riverside Derby</h1><p>One pitch. Two firms. Only one winner.</p></div><div className="match-meta"><div><span>{time <= 60 ? 'FINALE PHASE' : 'HEIMSPIEL'}</span><strong>{time <= 60 ? '2× HYPE' : 'RIVERSIDE'}</strong></div><div className={`timer ${time <= 30 ? 'urgent' : ''}`}>{Math.floor(time / 60).toString().padStart(2, '0')}:{(time % 60).toString().padStart(2, '0')}</div><button className="icon-button" disabled={!!game.result || countdown !== null} onClick={() => setRunning(v => !v)} aria-label={running ? 'Pausieren' : 'Fortsetzen'}>{running ? <Pause size={18} /> : <Play size={18} />}</button></div></div>
        <div className={`game-layout ${game.result ? 'has-result' : ''}`}>
-        <aside className="sidebar left-sidebar"><div className="player-card blue-player"><div className="player-id"><div className="crest blue-crest">R</div><div><b>Deine Firm</b><small>FC Riverside</small></div></div><div className="score">{blueScore}</div></div><div className="stat-card"><div className="stat-title">DEIN CLUBHAUS <Heart size={14} /></div><div className="health-value">{Math.ceil(buildingHp.blueFortress)} <small>/ 3.000 HP</small></div><div className="health-bar"><i style={{ width: `${buildingHp.blueFortress / 30}%` }} /></div><div className="stat-foot"><Shield size={13} /> Heimvorteil</div></div><div className="tip-card"><Zap size={17} /><div><b>Dein Spielzug</b><p>Karte wählen und links platzieren. Oder direkt auf das Feld ziehen. Tasten 1–4 wählen Karten, Leertaste pausiert.</p></div></div></aside>
+         <aside className="sidebar left-sidebar"><div className="player-card blue-player"><div className="player-id"><div className="crest blue-crest">R</div><div><b>Deine Firm</b><small>FC Riverside</small></div></div><div className="score">{blueScore}</div></div><div className="stat-card"><div className="stat-title">DEIN CLUBHAUS <Heart size={14} /></div><div className="health-value">{Math.ceil(buildingHp.blueFortress)} <small>/ 2.400 HP</small></div><div className="health-bar"><i style={{ width: `${buildingHp.blueFortress / 24}%` }} /></div><div className="stat-foot"><Shield size={13} /> Heimvorteil</div></div><div className="tip-card"><Zap size={17} /><div><b>Dein Spielzug</b><p>Karte wählen und links platzieren; ab der letzten Spielminute steigt der Gebäudeschaden.</p></div></div></aside>
          <section className="arena-wrap"><div className="arena">
            {countdown !== null && <div className={`countdown-overlay ${countdown === 'go' ? 'countdown-go' : ''}`} role="status" aria-live="assertive">
              <div className="countdown-smoke smoke-left" /><div className="countdown-smoke smoke-right" />
@@ -487,8 +529,8 @@ function App() {
               <p>{game.result === 'DERBYSIEG!' ? `Außenposten: ${blueScore} : ${redScore} · ${Math.round(game.totalDamage)} Gesamtschaden · Die Nacht gehört Riverside.` : `Außenposten: ${blueScore} : ${redScore} · ${Math.round(game.totalDamage)} Gesamtschaden · Aufstehen, Krone richten.`}</p>
               <div className="result-actions"><button className="primary" onClick={start}>REVANCHE <Play size={18} /></button><button className="secondary" onClick={() => setPage('menu')}>Hauptmenü</button></div>
              </div> : onlineStatus !== 'offline' ? <div className="match-overlay multiplayer-overlay"><Swords size={40} /><h2>{onlineStatus === 'waiting' ? onlineMode === 'matchmake' ? 'GEGNER WIRD GESUCHT' : 'DEIN DERBY-WARTERAUM' : 'VERBINDUNG WIRD HERGESTELLT'}</h2><p>{onlineStatus === 'waiting' ? onlineMode === 'matchmake' ? 'Du wirst automatisch mit dem nächsten Spieler verbunden.' : 'Link schicken oder QR-Code scannen:' : onlineMessage || 'Der Multiplayer-Server wird kontaktiert …'}</p>{onlineMode !== 'matchmake' && inviteLink && <div className="invite-link">{inviteQr && <img className="invite-qr" src={inviteQr} alt="QR-Code für die Derby-Einladung" />}<code>{inviteLink}</code><button className="secondary" onClick={() => navigator.clipboard?.writeText(inviteLink)}>LINK KOPIEREN</button></div>}{onlineMessage && onlineStatus === 'waiting' && <small>{onlineMessage}</small>}<button className="secondary" onClick={() => { socket.current?.close(); setOnlineStatus('offline'); setOnlineMode(null); setPage('menu') }}>Abbrechen</button></div> : <div className="match-overlay"><Trophy size={40} /><h2>HALBZEIT IM KOPF.</h2><p>Kurz durchatmen. Dein Derby wartet.</p><button className="primary" onClick={() => setRunning(true)}>WEITERSPIELEN <Play size={18} /></button><button className="secondary" onClick={() => setPage('menu')}>Hauptmenü</button></div>)}
-        </div><div className="arena-legend"><span><i className="legend-dot blue" /> DEINE FIRM</span><span><i className="legend-dot red" /> KIEZ FIRM</span><span>2 LANES · 2 BRÜCKEN</span></div></section>
-        <aside className="sidebar right-sidebar"><div className="player-card red-player"><div className="score">{redScore}</div><div className="player-id"><div className="crest red-crest">K</div><div><b>KiezKalle <span className="cpu-badge">KI</span></b><small>Auswärtsblock</small></div></div></div><div className="stat-card"><div className="stat-title">RIVALEN-CLUBHAUS <Heart size={14} /></div><div className="health-value">{Math.ceil(buildingHp.redFortress)} <small>/ 3.000 HP</small></div><div className="health-bar red-health"><i style={{ width: `${buildingHp.redFortress / 30}%` }} /></div></div><div className="combat-log"><div className="stat-title">LIVE-TICKER <Swords size={14} /></div>{game.log.map((entry, i) => <p key={i}>{entry}</p>)}</div></aside>
+         </div><div className="arena-legend"><span><i className="legend-dot blue" /> DEINE FIRM</span><span><i className="legend-dot red" /> KIEZ FIRM</span><span>{game.overtime > 0 ? 'SUDDEN DEATH' : '2 LANES · 2 BRÜCKEN'}</span></div></section>
+         <aside className="sidebar right-sidebar"><div className="player-card red-player"><div className="score">{redScore}</div><div className="player-id"><div className="crest red-crest">K</div><div><b>KiezKalle <span className="cpu-badge">KI</span></b><small>Auswärtsblock</small></div></div></div><div className="stat-card"><div className="stat-title">RIVALEN-CLUBHAUS <Heart size={14} /></div><div className="health-value">{Math.ceil(buildingHp.redFortress)} <small>/ 2.400 HP</small></div><div className="health-bar red-health"><i style={{ width: `${buildingHp.redFortress / 24}%` }} /></div></div><div className="combat-log"><div className="stat-title">LIVE-TICKER <Swords size={14} /></div>{game.log.map((entry, i) => <p key={i}>{entry}</p>)}</div></aside>
       </div>
        <div className="bottom-panel"><div className="hype"><div className="hype-label"><Flame size={17} /> HYPE <b>{hype.toFixed(1)}</b><span>/ 10</span></div><div className="hype-bar"><i style={{ width: `${hypePercent}%` }} /></div><small>+{time <= 60 ? '0,95' : '0,48'} / Sekunde</small></div>
           <div className="hand">{myQueue.slice(0, 4).map((id, index) => { const card = cards[id]; return <button title={`${card.name} · ${card.role} · ${card.cost} Hype`} draggable={false} onPointerDown={e => { e.preventDefault(); dragged.current = index; setSelected(index); setDraggingCard(true) }} className={`card ${rarityClass(card)} ${selected === index ? 'selected' : ''} ${hype < card.cost ? 'disabled' : ''}`} key={id} onClick={() => { setSelected(index); setDraggingCard(false) }} aria-label={`${card.name}, ${card.cost} Hype`} aria-pressed={selected === index}><span className="card-cost">{card.cost}</span>{cardArt(card)}<b>{card.name}</b><small>{card.role}</small></button> })}</div>

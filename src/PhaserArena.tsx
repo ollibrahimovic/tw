@@ -72,6 +72,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
         const sprites = new Map<string, PhaserType.GameObjects.Image>()
         const usedSprites = new Set<string>()
         const bars = this.add.graphics().setDepth(10)
+        const displaySide = (side: Side): Side => side === perspectiveRef.current ? 'blue' : 'red'
         const spawnIndicators = this.add.graphics().setDepth(11)
         const atmosphere = this.add.graphics().setDepth(.25)
         const showArt = (id: string, key: string, p: Point, character: boolean, alpha = 1, depth = 1) => {
@@ -90,7 +91,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
         const healthBar = (p: Point, hp: number, max: number, side: Side, width = 24, yOffset = 17) => {
           if (hp <= 0) return
           bars.fillStyle(DARK, .9).fillRect(p.x - width / 2, p.y + yOffset, width, 3)
-          bars.fillStyle(side === 'blue' ? BLUE : RED, 1)
+          bars.fillStyle(displaySide(side) === 'blue' ? BLUE : RED, 1)
             .fillRect(p.x - width / 2, p.y + yOffset, width * Math.max(0, Math.min(1, hp / max)), 3)
         }
         let hover: Point | null = null
@@ -340,8 +341,8 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           const fortressArt = building.key.includes('Fortress')
           const shot = gameRef.current.flares.find(flare => flare.source === building.key)
           const firing = !!shot && shot.age + stateAge < .18
-          const artKey = !fortressArt && firing ? `pub-throw-${building.side}-${artHealth(hp, building.max)}` :
-            `club-${building.side}-${fortressArt}-false-${artHealth(hp, building.max)}`
+          const artKey = !fortressArt && firing ? `pub-throw-${displaySide(building.side)}-${artHealth(hp, building.max)}` :
+            `club-${displaySide(building.side)}-${fortressArt}-false-${artHealth(hp, building.max)}`
           if (showArt(building.key,
             artKey,
             // Rubble is ground decoration, never part of the actor depth sort.
@@ -353,7 +354,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
               const end = enemy ? toScreen(enemy.x, enemy.y) : { x: at.x, y: at.y + (building.side === perspectiveRef.current ? -100 : 100) }
               const angle = Math.atan2(end.y - 12 - (at.y - 61.47), end.x - at.x - 1.48)
               const aim = (Math.round(angle / (Math.PI / 4)) + 8) % 8
-              showArt(`${building.key}-guard`, `gatling-${building.side}-${aim}-${firing}`,
+              showArt(`${building.key}-guard`, `gatling-${displaySide(building.side)}-${aim}-${firing}`,
                 at, false, 1, 1.001 + at.y / this.scale.height)
             }
             healthBar(at, hp, building.max, building.side, 36)
@@ -364,7 +365,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           const fortress = building.key.includes('Fortress')
           const width = fortress ? 48 : 36
           const height = fortress ? 34 : 28
-          const color = building.side === 'blue' ? BLUE : RED
+          const color = displaySide(building.side) === 'blue' ? BLUE : RED
           const roofY = p.y - height / 2 - 10
           polygon([
             { x: p.x, y: roofY - 9 },
@@ -392,7 +393,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           graphics.fillRect(p.x - width / 2 + 5, p.y - 3, 7, 9)
           graphics.fillRect(p.x + width / 2 - 12, p.y - 4, 7, 10)
           if (!fortress) {
-            graphics.fillStyle(building.side === 'blue' ? 0xd8c77e : 0xd08b50, 1)
+            graphics.fillStyle(displaySide(building.side) === 'blue' ? 0xd8c77e : 0xd08b50, 1)
             graphics.fillRect(p.x - 13, p.y - height / 2 - 15, 26, 10)
             graphics.fillStyle(DARK, .8)
             graphics.fillRect(p.x - 9, p.y - height / 2 - 12, 18, 2)
@@ -415,11 +416,11 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
             polygon(points.map(([x, y]) => point(x, y)), fill, alpha, stroke)
           const stroke = (a: [number, number], b: [number, number], color: number, width: number, alpha = 1) =>
             line(point(a[0], a[1]), point(b[0], b[1]), color, width * scale, alpha)
-          const team = unit.side === 'blue' ? BLUE : RED
+          const team = displaySide(unit.side) === 'blue' ? BLUE : RED
           const opacity = ghost ? .48 : 1
-          const skin = unit.side === 'blue' ? 0xc39170 : 0xa9795d
+          const skin = displaySide(unit.side) === 'blue' ? 0xc39170 : 0xa9795d
           const jersey = 0x273134
-          const scarf = unit.side === 'blue' ? 0x5baaa0 : 0xc46249
+          const scarf = displaySide(unit.side) === 'blue' ? 0x5baaa0 : 0xc46249
           const phase = animationClock * .012 + unit.id * .7
           const movement = unit.moving ? 1 : .22
           const legSwing = Math.sin(phase) * 11 * movement
@@ -543,12 +544,12 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           const pose = ghost ? 0 : unit.moving ? 1 + Math.floor(animationClock / 160 + unit.id) % 2 :
             unit.cooldown > unit.card.rate - .2 ? 3 : 0
           if (showArt(ghost ? 'preview' : `unit-${unit.id}`,
-            `fan-${index}-${unit.side}-${back}-${pose}`, p, true, ghost ? .48 : 1,
+            `fan-${index}-${displaySide(unit.side)}-${back}-${pose}`, p, true, ghost ? .48 : 1,
             ghost ? 9 : 1 + p.y / this.scale.height)) {
             if (!ghost) healthBar(p, unit.hp, unit.card.hp, unit.side, 24, -48)
             return
           }
-          const color = unit.side === 'blue' ? BLUE : RED
+          const color = displaySide(unit.side) === 'blue' ? BLUE : RED
           const radius = unit.card.name === 'Flitzer' ? 11 : 8
           if (unit.card.name === 'Der Ultra') drawUltra(unit, ghost)
           else {
@@ -576,7 +577,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           const p = toScreen(unit.x, unit.y)
           const radius = unit.card.name === 'Der Ultra' ? 25 : unit.card.name === 'Flitzer' ? 18 : 15
           const pulse = 1 + Math.sin(animationClock * .012 + unit.id) * .06
-          const teamColor = unit.side === 'blue' ? BLUE : RED
+          const teamColor = displaySide(unit.side) === 'blue' ? BLUE : RED
           spawnIndicators.lineStyle(1, teamColor, .22)
           spawnIndicators.strokeCircle(p.x, p.y, radius * pulse)
           spawnIndicators.lineStyle(4, 0xe4d09a, .95)
@@ -640,7 +641,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           graphics.lineStyle(2, allowed ? 0xdfffe8 : 0xff9b8e, .8)
           graphics.strokeRect(p.x - footprintWidth / 2, p.y - footprintHeight / 2, footprintWidth, footprintHeight)
           if (selectedRef.current.kind === 'building') {
-            showArt('preview', `stall-${perspectiveRef.current}-${selectedRef.current.name === 'Würstchenbude' ? 'sausage' : 'beer'}-100`,
+            showArt('preview', `stall-blue-${selectedRef.current.name === 'Würstchenbude' ? 'sausage' : 'beer'}-100`,
               p, false, .48, 9)
             return
           }
@@ -710,7 +711,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           for (const structure of gameRef.current.structures) {
             const p = toScreen(structure.x, structure.y)
             showArt(`structure-${structure.id}`,
-              `stall-${structure.side}-${structure.card.name === 'Würstchenbude' ? 'sausage' : 'beer'}-${artHealth(structure.hp, structure.max)}`,
+              `stall-${displaySide(structure.side)}-${structure.card.name === 'Würstchenbude' ? 'sausage' : 'beer'}-${artHealth(structure.hp, structure.max)}`,
               p, false, 1, structure.hp <= 0 ? .4 : 1 + p.y / this.scale.height)
             healthBar(p, structure.hp, structure.max, structure.side, 32)
           }

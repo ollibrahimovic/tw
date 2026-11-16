@@ -12,9 +12,9 @@ export function laneRoute(side: Side, lane: number) {
 export type Flare = { id: number; source: BuildingKey; side: Side; target: number; x: number; y: number; age: number }
 export const FLARE_FLIGHT = .65
 export const FLARE_INTERVAL = 1.5
-export const GATLING_INTERVAL = .6
-export const GATLING_ATTACK_RANGE = 40
-export const FLARE_DAMAGE = 45
+export const GATLING_INTERVAL = .8
+export const GATLING_ATTACK_RANGE = 34
+export const FLARE_DAMAGE = 30
 // Pub guards should open fire as soon as an enemy clears the bridge.
 // The bridge-to-pub distance is about 25 renderer units, with a small
 // margin so units cannot slip past the lane entrance before the first shot.
@@ -30,6 +30,9 @@ export const SMOKE_RADIUS = 18
 export const SMOKE_DAMAGE_PER_SECOND = 30
 export const SIGNAL_RADIUS = 15
 export const SIGNAL_BUILDING_DAMAGE = 220
+export const LATE_BUILDING_DAMAGE_MULTIPLIER = 1.8
+export const SUDDEN_DEATH_BUILDING_DAMAGE_MULTIPLIER = 4
+export const SUDDEN_DEATH_DURATION = 30
 export const BEER_FLIGHT = .5
 export const PUDDLE_LIFETIME = 2.4
 export type BuildingTarget = BuildingKey | `stall:${number}`
@@ -61,22 +64,22 @@ export const cards: Card[] = [
   { name: 'Bierbude', role: 'Verliert Leben und spawnt alle 5s Bierbecher-Werfer', cost: 4, icon: '▣', color: '#c99b42', damage: 0, hp: 600, speed: 0, range: 0, rate: 5, rarity: 'Rare', kind: 'building' },
   { name: 'Würstchenverkäufer', role: 'Aggressiver Nahkämpfer aus der Würstchenbude', cost: 0, icon: '♨', color: '#d47b3c', damage: 92, hp: 560, speed: 6.5, range: 3, rate: .7, rarity: 'Rare', hidden: true },
   { name: 'Würstchenbude', role: 'Lockt Gegner an; spawnt beim Einsturz einen Verkäufer', cost: 4, icon: '▤', color: '#b87843', damage: 0, hp: 760, speed: 0, range: 0, rate: 0, rarity: 'Rare', kind: 'building' },
-  { name: 'Flitzer', role: 'Langsamer Gebäudetank und Ablenkung', cost: 5, icon: '●', color: '#c58f72', damage: 30, hp: 1500, speed: 2.2, range: 3, rate: 1.2, rarity: 'Epic' },
-  { name: 'Fanmarsch', role: 'Geschlossener Gebäudetank mit Banner', cost: 6, icon: '⚑', color: '#7d8f9b', damage: 12, hp: 2600, speed: 1.55, range: 3, rate: 1.4, rarity: 'Legendary' },
+  { name: 'Flitzer', role: 'Langsamer Gebäudetank und Ablenkung', cost: 5, icon: '●', color: '#c58f72', damage: 25, hp: 1500, speed: 2.2, range: 3, rate: 1.2, rarity: 'Epic' },
+  { name: 'Fanmarsch', role: 'Geschlossener Gebäudetank mit Banner', cost: 6, icon: '⚑', color: '#7d8f9b', damage: 24, hp: 2600, speed: 1.55, range: 3, rate: 1.4, rarity: 'Legendary' },
 ]
 export const AI_DECK = [0, 2, 3, 5, 7, 9, 16, 20]
 export type BuildingKey = 'blueFortress' | 'redFortress' | 'bluePubOne' | 'bluePubTwo' | 'redPubOne' | 'redPubTwo'
 export const buildings: { key: BuildingKey; side: Side; x: number; y: number; max: number }[] = [
-  { key: 'blueFortress', side: 'blue', ...rectCenter(TILE_BUILDINGS.blueFortress), max: 3000 },
-  { key: 'redFortress', side: 'red', ...rectCenter(TILE_BUILDINGS.redFortress), max: 3000 },
+  { key: 'blueFortress', side: 'blue', ...rectCenter(TILE_BUILDINGS.blueFortress), max: 2400 },
+  { key: 'redFortress', side: 'red', ...rectCenter(TILE_BUILDINGS.redFortress), max: 2400 },
   { key: 'bluePubOne', side: 'blue', ...rectCenter(TILE_BUILDINGS.bluePubOne), max: 1200 },
   { key: 'bluePubTwo', side: 'blue', ...rectCenter(TILE_BUILDINGS.bluePubTwo), max: 1200 },
   { key: 'redPubOne', side: 'red', ...rectCenter(TILE_BUILDINGS.redPubOne), max: 1200 },
   { key: 'redPubTwo', side: 'red', ...rectCenter(TILE_BUILDINGS.redPubTwo), max: 1200 },
 ]
-export type Game = { time: number; hype: number; redHype: number; aiHype: number; aiClock: number; aiDeck: number[]; multiplayer: boolean; units: Unit[]; structures: Structure[]; hp: Record<BuildingKey, number>; queue: number[]; redQueue: number[]; id: number; result: string | null; log: string[]; shots: number; totalDamage: number; damageEvents: DamageEvent[]; flares: Flare[]; impacts: { id: number; x: number; y: number; age: number }[]; blood: { id: number; x: number; y: number; age: number }[]; bloodStains: { id: number; x: number; y: number; age: number }[]; spells: Spell[]; buildingCooldown: Record<BuildingKey, number>; beers: Beer[]; puddles: { id: number; x: number; y: number; age: number }[]; torches: Torch[]; fires: { id: number; x: number; y: number; age: number }[] }
+export type Game = { time: number; overtime: number; hype: number; redHype: number; aiHype: number; aiClock: number; aiDeck: number[]; multiplayer: boolean; units: Unit[]; structures: Structure[]; hp: Record<BuildingKey, number>; queue: number[]; redQueue: number[]; id: number; result: string | null; log: string[]; shots: number; totalDamage: number; damageEvents: DamageEvent[]; flares: Flare[]; impacts: { id: number; x: number; y: number; age: number }[]; blood: { id: number; x: number; y: number; age: number }[]; bloodStains: { id: number; x: number; y: number; age: number }[]; spells: Spell[]; buildingCooldown: Record<BuildingKey, number>; beers: Beer[]; puddles: { id: number; x: number; y: number; age: number }[]; torches: Torch[]; fires: { id: number; x: number; y: number; age: number }[] }
 export function newGame(deck: number[], aiDeck = AI_DECK, multiplayer = false, redDeck = aiDeck): Game {
-  return { time: 180, hype: 7, redHype: 7, aiHype: 7, aiClock: 2, aiDeck: [...aiDeck], multiplayer, units: [], structures: [], hp: Object.fromEntries(buildings.map(b => [b.key, b.max])) as Game['hp'], queue: [...deck], redQueue: [...redDeck], id: 1, result: null, log: ['Anpfiff! Jede Lane führt über die gegnerische Kneipe.'], shots: 0, totalDamage: 0, damageEvents: [], flares: [], impacts: [], blood: [], bloodStains: [], spells: [], buildingCooldown: Object.fromEntries(buildings.map(b => [b.key, 0])) as Game['buildingCooldown'], beers: [], puddles: [], torches: [], fires: [] }
+  return { time: 180, overtime: 0, hype: 7, redHype: 7, aiHype: 7, aiClock: 2, aiDeck: [...aiDeck], multiplayer, units: [], structures: [], hp: Object.fromEntries(buildings.map(b => [b.key, b.max])) as Game['hp'], queue: [...deck], redQueue: [...redDeck], id: 1, result: null, log: ['Anpfiff! Jede Lane führt über die gegnerische Kneipe.'], shots: 0, totalDamage: 0, damageEvents: [], flares: [], impacts: [], blood: [], bloodStains: [], spells: [], buildingCooldown: Object.fromEntries(buildings.map(b => [b.key, 0])) as Game['buildingCooldown'], beers: [], puddles: [], torches: [], fires: [] }
 }
 const spellType = (card: Card): Spell['type'] | undefined => ({ 8: 'smoke', 9: 'signal', 10: 'salvo', 11: 'beer-shower' } as Record<number, Spell['type']>)[cards.indexOf(card)]
 const unitCount = (card: Card) => cards.indexOf(card) === 14 ? 4 : cards.indexOf(card) === 15 ? 3 : 1
@@ -198,6 +201,9 @@ function avoidBuildings(u: Unit, goal: { x: number; y: number }, solids: Solid[]
 const recordDamage = (g: Game, point: { x: number; y: number }, amount: number, kind: DamageEvent['kind']) => {
   if (amount > 0) { g.totalDamage += amount; g.damageEvents.push({ id: g.id++, x: point.x, y: point.y, amount, kind, age: 0 }) }
 }
+const buildingDamageMultiplier = (g: Game) =>
+  g.time <= 0 ? SUDDEN_DEATH_BUILDING_DAMAGE_MULTIPLIER :
+    g.time <= 60 ? LATE_BUILDING_DAMAGE_MULTIPLIER : 1
 const spellLifetime = (type: Spell['type']) => type === 'smoke' ? 7.5 : type === 'beer-shower' ? 3.4 : type === 'salvo' ? 2.5 : 1.9
 function separateUnits(units: Unit[]) {
   // Resolve softly in a few passes so a crowd forms a loose row instead of a stack.
@@ -242,7 +248,7 @@ function pursuitWaypoint(u: Unit, target: Unit) {
 }
 export function tick(previous: Game, dt: number, random = Math.random): Game {
   if (previous.result) return previous
-  const g: Game = { ...previous, hp: { ...previous.hp }, structures: previous.structures.map(s => ({ ...s, cooldown: Math.max(0, s.cooldown - dt), age: s.age + dt })), units: previous.units.map(u => ({ ...u, moving: false, spawnDelay: Math.max(0, (u.spawnDelay ?? 0) - dt) })), log: [...previous.log], buildingCooldown: { ...previous.buildingCooldown }, damageEvents: previous.damageEvents.map(e => ({ ...e, age: e.age + dt })).filter(e => e.age < .9), flares: [], impacts: previous.impacts.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < .45), blood: previous.blood.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < .58), bloodStains: previous.bloodStains.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < BLOOD_STAIN_LIFETIME), spells: previous.spells.map(s => ({ ...s, age: s.age + dt })).filter(s => s.age < spellLifetime(s.type)), beers: [], puddles: previous.puddles.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < PUDDLE_LIFETIME), torches: [], fires: previous.fires.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < FIRE_LIFETIME) }
+  const g: Game = { ...previous, overtime: previous.time <= 0 ? previous.overtime + dt : 0, hp: { ...previous.hp }, structures: previous.structures.map(s => ({ ...s, cooldown: Math.max(0, s.cooldown - dt), age: s.age + dt })), units: previous.units.map(u => ({ ...u, moving: false, spawnDelay: Math.max(0, (u.spawnDelay ?? 0) - dt) })), log: [...previous.log], buildingCooldown: { ...previous.buildingCooldown }, damageEvents: previous.damageEvents.map(e => ({ ...e, age: e.age + dt })).filter(e => e.age < .9), flares: [], impacts: previous.impacts.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < .45), blood: previous.blood.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < .58), bloodStains: previous.bloodStains.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < BLOOD_STAIN_LIFETIME), spells: previous.spells.map(s => ({ ...s, age: s.age + dt })).filter(s => s.age < spellLifetime(s.type)), beers: [], puddles: previous.puddles.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < PUDDLE_LIFETIME), torches: [], fires: previous.fires.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < FIRE_LIFETIME) }
   for (const old of previous.torches) {
     const target = typeof old.target === 'number' ? g.units.find(u => u.id === old.target && activeUnit(u)) : undefined
     const torch = { ...old, age: old.age + dt, x: target?.x ?? old.x, y: target?.y ?? old.y }
@@ -250,8 +256,9 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
     else {
        if (typeof torch.target === 'string') {
          const stall = torch.target.startsWith('stall:') ? g.structures.find(s => `stall:${s.id}` === torch.target) : undefined
-         if (stall) { stall.hp = Math.max(0, stall.hp - torch.damage); recordDamage(g, stall, torch.damage, 'building') }
-         else { g.hp[torch.target as BuildingKey] = Math.max(0, g.hp[torch.target as BuildingKey] - torch.damage); const b = buildings.find(b => b.key === torch.target); if (b) recordDamage(g, b, torch.damage, 'building') }
+          const damage = torch.damage * buildingDamageMultiplier(g)
+          if (stall) { stall.hp = Math.max(0, stall.hp - damage); recordDamage(g, stall, damage, 'building') }
+          else { g.hp[torch.target as BuildingKey] = Math.max(0, g.hp[torch.target as BuildingKey] - damage); const b = buildings.find(b => b.key === torch.target); if (b) recordDamage(g, b, damage, 'building') }
        }
       for (const u of g.units) {
         if (u.side !== torch.side && activeUnit(u) && distance(u, torch) < 9) { const amount = u.id === torch.target ? torch.damage : torch.damage * .6; u.hp -= amount; recordDamage(g, u, amount, 'area') }
@@ -269,8 +276,9 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
       if (target) { target.hp -= beer.damage; recordDamage(g, target, beer.damage, 'hit') }
        else if (typeof beer.target === 'string') {
          const stall = beer.target.startsWith('stall:') ? g.structures.find(s => `stall:${s.id}` === beer.target) : undefined
-         if (stall) { stall.hp = Math.max(0, stall.hp - beer.damage); recordDamage(g, stall, beer.damage, 'building') }
-         else { g.hp[beer.target as BuildingKey] = Math.max(0, g.hp[beer.target as BuildingKey] - beer.damage); const b = buildings.find(b => b.key === beer.target); if (b) recordDamage(g, b, beer.damage, 'building') }
+          const damage = beer.damage * buildingDamageMultiplier(g)
+          if (stall) { stall.hp = Math.max(0, stall.hp - damage); recordDamage(g, stall, damage, 'building') }
+          else { g.hp[beer.target as BuildingKey] = Math.max(0, g.hp[beer.target as BuildingKey] - damage); const b = buildings.find(b => b.key === beer.target); if (b) recordDamage(g, b, damage, 'building') }
        }
       g.puddles.push({ id: beer.id, x: beer.x, y: beer.y, age: 0 })
       g.shots++
@@ -291,13 +299,15 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
   for (const spell of g.spells) {
     if (spell.type === 'signal' && spell.age >= SPELL_FLIGHT && !spell.applied) {
       for (const u of g.units) if (u.side !== spell.side && activeUnit(u) && distance(u, spell) <= SIGNAL_RADIUS) { u.hp -= cards[9].damage; recordDamage(g, u, cards[9].damage, 'area') }
-       for (const b of buildings) if (b.side !== spell.side && g.hp[b.key] > 0 && distance(b, spell) <= SIGNAL_RADIUS) { g.hp[b.key] = Math.max(0, g.hp[b.key] - SIGNAL_BUILDING_DAMAGE); recordDamage(g, b, SIGNAL_BUILDING_DAMAGE, 'building') }
-       for (const b of g.structures) if (b.side !== spell.side && b.hp > 0 && distance(b, spell) <= SIGNAL_RADIUS) { b.hp = Math.max(0, b.hp - SIGNAL_BUILDING_DAMAGE); recordDamage(g, b, SIGNAL_BUILDING_DAMAGE, 'building') }
+        const damage = SIGNAL_BUILDING_DAMAGE * buildingDamageMultiplier(g)
+        for (const b of buildings) if (b.side !== spell.side && g.hp[b.key] > 0 && distance(b, spell) <= SIGNAL_RADIUS) { g.hp[b.key] = Math.max(0, g.hp[b.key] - damage); recordDamage(g, b, damage, 'building') }
+        for (const b of g.structures) if (b.side !== spell.side && b.hp > 0 && distance(b, spell) <= SIGNAL_RADIUS) { b.hp = Math.max(0, b.hp - damage); recordDamage(g, b, damage, 'building') }
       g.impacts.push({ id: spell.id, x: spell.x, y: spell.y, age: 0 })
       spell.applied = true
     } else if (spell.type === 'salvo' && spell.age >= SPELL_FLIGHT && !spell.applied) {
         for (const u of g.units) if (u.side !== spell.side && activeUnit(u) && distance(u, spell) <= 15) { u.hp -= cards[10].damage; recordDamage(g, u, cards[10].damage, 'area') }
-        for (const b of g.structures) if (b.side !== spell.side && b.hp > 0 && distance(b, spell) <= 15) { b.hp = Math.max(0, b.hp - cards[10].damage); recordDamage(g, b, cards[10].damage, 'building') }
+         const damage = cards[10].damage * buildingDamageMultiplier(g)
+         for (const b of g.structures) if (b.side !== spell.side && b.hp > 0 && distance(b, spell) <= 15) { b.hp = Math.max(0, b.hp - damage); recordDamage(g, b, damage, 'building') }
       g.fires.push({ id: spell.id, x: spell.x - 2, y: spell.y, age: 0 })
       g.fires.push({ id: spell.id + 1, x: spell.x + 2, y: spell.y + 2, age: 0 })
       g.impacts.push({ id: spell.id, x: spell.x, y: spell.y, age: 0 })
@@ -418,9 +428,14 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
           recordDamage(g, target, damage, u.card.range <= 4 ? 'hit' : 'area')
           if (u.card.range <= 4) g.blood.push({ id: g.id++, x: target.x, y: target.y, age: 0 })
         } else if (structureTarget) {
-          structureTarget.hp -= damage
-          recordDamage(g, structureTarget, damage, 'building')
-        } else { g.hp[goal.key] = Math.max(0, g.hp[goal.key] - damage); recordDamage(g, goal, damage, 'building') }
+           const buildingDamage = damage * buildingDamageMultiplier(g)
+           structureTarget.hp -= buildingDamage
+           recordDamage(g, structureTarget, buildingDamage, 'building')
+         } else {
+           const buildingDamage = damage * buildingDamageMultiplier(g)
+           g.hp[goal.key] = Math.max(0, g.hp[goal.key] - buildingDamage)
+           recordDamage(g, goal, buildingDamage, 'building')
+         }
         u.cooldown = u.card.rate
         g.shots++
       }
@@ -488,7 +503,7 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
   g.units = g.units.filter(u => u.hp > 0)
   if (g.hp.redFortress <= 0) g.result = 'DERBYSIEG!'
   else if (g.hp.blueFortress <= 0) g.result = 'NIEDERLAGE'
-  else if (g.time <= 0) {
+  else if (g.time <= 0 && g.overtime >= SUDDEN_DEATH_DURATION) {
     const blue = Number(g.hp.redPubOne <= 0) + Number(g.hp.redPubTwo <= 0)
     const red = Number(g.hp.bluePubOne <= 0) + Number(g.hp.bluePubTwo <= 0)
     g.result = blue === red ? 'UNENTSCHIEDEN' : blue > red ? 'DERBYSIEG!' : 'NIEDERLAGE'
