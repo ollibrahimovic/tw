@@ -65,7 +65,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
     void Promise.all([import('phaser'), import('./phaserArt')]).then(([{ default: Phaser }, { artHealth, loadArenaArt }]) => {
       if (disposed || !host.current) return
 
-      const scene = new Phaser.Scene('TerraceWarsArena') as ArenaScene
+      const scene = new Phaser.Scene('HoolArena') as ArenaScene
       scene.preload = function () { loadArenaArt(this) }
       scene.create = function () {
         const graphics = this.add.graphics()

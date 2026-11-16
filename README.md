@@ -1,4 +1,4 @@
-# ⚽ TERRACE WARS
+# ⚽ HOOL ARENA
 
 Ein browserbasiertes Echtzeit-Strategiespiel über rivalisierende Fußball-Fangruppen.
 

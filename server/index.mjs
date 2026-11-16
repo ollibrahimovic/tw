@@ -16,7 +16,7 @@ const httpServer = createServer((request, response) => {
     return
   }
   response.writeHead(404)
-  response.end('Terrace Wars multiplayer server')
+  response.end('Hool Arena multiplayer server')
 })
 const wss = new WebSocketServer({ server: httpServer })
 const rooms = new Map()
@@ -138,5 +138,5 @@ wss.on('connection', socket => {
 })
 
 httpServer.listen(port, '0.0.0.0', () => {
-  console.log(`Terrace Wars multiplayer server listening on :${port}`)
+  console.log(`Hool Arena multiplayer server listening on :${port}`)
 })
