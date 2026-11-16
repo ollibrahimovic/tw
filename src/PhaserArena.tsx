@@ -68,6 +68,7 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
           fontSize: '12px',
         }).setDepth(20)
         let hover: Point | null = null
+        let animationClock = 0
 
         const metrics = () => {
           const width = this.scale.width
@@ -232,11 +233,13 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
           const skin = unit.side === 'blue' ? 0xc39170 : 0xa9795d
           const jersey = 0x273134
           const scarf = unit.side === 'blue' ? 0x5baaa0 : 0xc46249
-          const phase = this.time.now * .012 + unit.id * .7
+          const phase = animationClock * .012 + unit.id * .7
           const movement = unit.moving ? 1 : .22
-          const legSwing = Math.sin(phase) * 8 * movement
+          const legSwing = Math.sin(phase) * 11 * movement
           const armSwing = Math.sin(phase + Math.PI) * 6 * movement
           const back = unit.facingBack || (unit.side === 'red' && unit.moving)
+          const punching = unit.targetId !== undefined && unit.card.range <= 4
+          const punch = punching ? Math.max(0, Math.sin(animationClock * .024 + unit.id)) : 0
 
           // The Ultra is intentionally drawn as a chunky, readable game
           // silhouette rather than another circular unit marker.
@@ -255,12 +258,12 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
             [-16, -1 + armSwing], [-10, -10],
           ], 0x343d3c, opacity)
           shape([
-            [10, -18], [18, -12 - armSwing], [21, -3 - armSwing],
-            [16, -1 - armSwing], [10, -10],
+            [10, -18], [18 + punch * 9, -12 - armSwing], [21 + punch * 13, -3 - armSwing],
+            [16 + punch * 10, -1 - armSwing], [10, -10],
           ], 0x343d3c, opacity)
           graphics.fillStyle(skin, opacity)
           const leftFist = point(-19, -2 + armSwing)
-          const rightFist = point(19, -2 - armSwing)
+          const rightFist = point(19 + punch * 13, -2 - armSwing)
           graphics.fillCircle(leftFist.x, leftFist.y, 4 * scale)
           graphics.fillCircle(rightFist.x, rightFist.y, 4 * scale)
 
@@ -333,6 +336,29 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
 
         const drawEffects = () => {
           const current = gameRef.current
+          for (const stain of current.bloodStains) {
+            const p = toScreen(stain.x, stain.y)
+            const fade = Math.max(0, 1 - stain.age / 3.2)
+            graphics.fillStyle(0x651f25, .62 * fade)
+            graphics.fillEllipse(p.x, p.y + 4, 17 + stain.age * 3, 7 + stain.age * 1.2)
+            graphics.fillStyle(0xa83a35, .45 * fade)
+            graphics.fillCircle(p.x - 3, p.y + 2, 3)
+            graphics.fillCircle(p.x + 4, p.y + 3, 2)
+          }
+          for (const blood of current.blood) {
+            const p = toScreen(blood.x, blood.y)
+            const fade = Math.max(0, 1 - blood.age / .58)
+            for (let i = 0; i < 5; i++) {
+              const angle = -Math.PI * (.22 + i * .14)
+              const distance = 8 + blood.age * (22 + i * 3)
+              const particle = {
+                x: p.x + Math.cos(angle) * distance + Math.sin(i * 4.2) * 3,
+                y: p.y + Math.sin(angle) * distance - blood.age * blood.age * 18,
+              }
+              graphics.fillStyle(i % 2 ? 0x8f282d : 0xd14b3f, fade)
+              graphics.fillCircle(particle.x, particle.y, Math.max(1, 2.6 - blood.age * 2))
+            }
+          }
           for (const flare of current.flares) {
             const source = buildings.find(building => building.key === flare.source)
             if (!source) continue
@@ -390,7 +416,10 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
           drawPlacement()
           label.setPosition(10, 8).setText(`PHASER · ${gameRef.current.units.length} Einheiten · ${gameRef.current.time.toFixed(1)}s`)
         }
-        this.events.on(Phaser.Scenes.Events.UPDATE, () => scene.renderArena?.())
+        this.events.on(Phaser.Scenes.Events.UPDATE, (_time: number, delta: number) => {
+          animationClock += delta
+          scene.renderArena?.()
+        })
       }
 
       instance = new Phaser.Game({
