@@ -348,6 +348,11 @@
     padding-bottom: var(--mobile-panel-height);
   }
 
+  .app-shell.in-arena .terrace-fan-away,
+  .app-shell.in-arena .terrace-flag-away {
+    display: none;
+  }
+
   .app-shell.in-arena .iso-arena {
     display: block;
     width: 100%;
