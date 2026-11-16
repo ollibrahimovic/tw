@@ -107,7 +107,7 @@ export function canDeploy(g: Game, card: Card, x: number, y: number, side: Side 
   const enemy = side === 'blue' ? 'red' : 'blue'
   const pub = `${enemy}Pub${tile.x < 9.5 ? 'One' : 'Two'}` as BuildingKey
   const ownHalf = side === 'blue' ? tile.y >= 17 : tile.y <= 14
-  const captured = g.hp[pub] <= 0 && (side === 'blue' ? tile.y >= 8 && tile.y <= 14 : tile.y >= 17 && tile.y <= 23)
+  const captured = g.hp[pub] <= 0 && (side === 'blue' ? tile.y >= 1 && tile.y <= 14 : tile.y >= 17 && tile.y <= 30)
   return ownHalf || (card.kind !== 'building' && captured)
 }
 export function deploy(g: Game, slot: number, x: number, y: number, side: Side = 'blue'): Game {
