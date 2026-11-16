@@ -234,8 +234,9 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
           const scarf = unit.side === 'blue' ? 0x5baaa0 : 0xc46249
           const phase = this.time.now * .012 + unit.id * .7
           const movement = unit.moving ? 1 : .22
-          const legSwing = Math.sin(phase) * 5 * movement
-          const armSwing = Math.sin(phase + Math.PI) * 4 * movement
+          const legSwing = Math.sin(phase) * 8 * movement
+          const armSwing = Math.sin(phase + Math.PI) * 6 * movement
+          const back = unit.facingBack || (unit.side === 'red' && unit.moving)
 
           // The Ultra is intentionally drawn as a chunky, readable game
           // silhouette rather than another circular unit marker.
@@ -275,17 +276,33 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
           graphics.fillRect(p.x + 5 * scale, p.y - 12 * scale, 3 * scale, 4 * scale)
           stroke([-7, -4], [7, -4], 0x93958a, 1, .65 * opacity)
           stroke([0, -7], [0, 7], 0x93958a, 1, .55 * opacity)
+          if (back) {
+            stroke([-8, -19], [8, -19], scarf, 2.5, opacity)
+            stroke([-7, -14], [7, -14], 0xd0c18e, 1, .8 * opacity)
+            stroke([-5, -3], [5, -3], 0x93958a, 1, .65 * opacity)
+          }
 
           // Hood/balaclava and the exposed eyes make the character readable
           // even when several Ultras are deployed together.
           graphics.fillStyle(0x182226, opacity)
           graphics.fillCircle(p.x, p.y - 31 * scale, 13 * scale)
-          graphics.fillStyle(skin, opacity)
-          graphics.fillRoundedRect(p.x - 10 * scale, p.y - 32 * scale, 20 * scale, 9 * scale, 3 * scale)
-          graphics.fillStyle(DARK, opacity)
-          graphics.fillRect(p.x - 7 * scale, p.y - 30 * scale, 4 * scale, 2 * scale)
-          graphics.fillRect(p.x + 3 * scale, p.y - 30 * scale, 4 * scale, 2 * scale)
-          stroke([-6, -25], [6, -25], 0x070f12, 2.5, opacity)
+          if (back) {
+            stroke([-9, -36], [0, -41], 0x56605c, 1.2, opacity)
+            stroke([0, -41], [9, -36], 0x56605c, 1.2, opacity)
+            stroke([-8, -29], [8, -29], scarf, 2.5, opacity)
+            stroke([-4, -27], [0, -20], scarf, 1.5, opacity)
+            stroke([4, -27], [0, -20], scarf, 1.5, opacity)
+          } else {
+            graphics.fillStyle(skin, opacity)
+            graphics.fillRoundedRect(p.x - 10 * scale, p.y - 32 * scale, 20 * scale, 9 * scale, 3 * scale)
+            graphics.fillStyle(DARK, opacity)
+            graphics.fillRect(p.x - 7 * scale, p.y - 30 * scale, 4 * scale, 2 * scale)
+            graphics.fillRect(p.x + 3 * scale, p.y - 30 * scale, 4 * scale, 2 * scale)
+            stroke([-7, -33], [-2, -35], 0x070f12, 1.8, opacity)
+            stroke([2, -35], [7, -33], 0x070f12, 1.8, opacity)
+            stroke([-6, -25], [6, -25], 0x070f12, 2.5, opacity)
+            stroke([-3, -24], [0, -22], 0xb43d38, 1.1, opacity)
+          }
           stroke([-8, -38], [8, -38], scarf, 2, opacity)
           stroke([-10, -36], [-13, -27], scarf, 2, opacity)
           stroke([10, -36], [13, -27], scarf, 2, opacity)

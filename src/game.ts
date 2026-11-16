@@ -330,7 +330,7 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
          u.x += dx * movement
          u.y += (waypoint.y - u.y) / d * movement
          u.moving = movement > .001
-         if (u.moving) u.facingBack = dx > .08
+          if (u.moving) u.facingBack = u.side === 'blue' ? dx > .08 : dx < -.08
        }
        if (!pointTarget && movement >= d && u.routeIndex < route.length - 1) u.routeIndex++
     }
