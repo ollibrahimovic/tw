@@ -495,7 +495,7 @@ export function Arena({ game, selectedCard, active, dragging = false, perspectiv
           })}
         </g>
       })}
-      {showPlacement && hover && <rect x={project(hover.x, hover.y).x - 16} y={project(hover.x, hover.y).y - 16} width="32" height="32" fill={hoverAllowed ? '#82f4c0' : '#ef6354'} fillOpacity=".35" stroke={hoverAllowed ? '#e1ffe9' : '#ff9788'} strokeWidth="3" />}
+      {showPlacement && hover && <rect x={project(hover.x, hover.y).x - 16} y={project(hover.x, hover.y).y - 16 - (mobileLayout ? 32 : 0)} width="32" height="32" fill={hoverAllowed ? '#82f4c0' : '#ef6354'} fillOpacity=".35" stroke={hoverAllowed ? '#e1ffe9' : '#ff9788'} strokeWidth="3" />}
       </g>
     </g>
     <g pointerEvents="none" className="beer-puddles">{game.puddles.map(puddle => {
