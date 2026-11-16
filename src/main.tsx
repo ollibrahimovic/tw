@@ -273,7 +273,10 @@ function App() {
     setOnlineMessage('')
     setPage('arena')
     const local = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    const endpoint = import.meta.env.VITE_MULTIPLAYER_URL || (local ? `ws://${window.location.hostname}:8787` : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`)
+    const renderDefault = window.location.hostname.endsWith('.onrender.com') ? 'wss://terrace-wars-multiplayer.onrender.com' : ''
+    const endpoint = import.meta.env.VITE_MULTIPLAYER_URL || (local
+      ? `ws://${window.location.hostname}:8787`
+      : renderDefault || `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`)
     const connection = new WebSocket(endpoint)
     socket.current = connection
     connection.onopen = () => {
