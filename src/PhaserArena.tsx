@@ -221,81 +221,74 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
 
         const drawUltra = (unit: Game['units'][number], ghost = false) => {
           const p = toScreen(unit.x, unit.y)
+          const scale = .72
+          const point = (x: number, y: number): Point => ({ x: p.x + x * scale, y: p.y + y * scale })
+          const shape = (points: Array<[number, number]>, fill: number, alpha = 1, stroke = DARK) =>
+            polygon(points.map(([x, y]) => point(x, y)), fill, alpha, stroke)
+          const stroke = (a: [number, number], b: [number, number], color: number, width: number, alpha = 1) =>
+            line(point(a[0], a[1]), point(b[0], b[1]), color, width * scale, alpha)
           const team = unit.side === 'blue' ? BLUE : RED
           const opacity = ghost ? .48 : 1
           const skin = unit.side === 'blue' ? 0xc39170 : 0xa9795d
           const jersey = 0x273134
           const scarf = unit.side === 'blue' ? 0x5baaa0 : 0xc46249
+          const phase = this.time.now * .012 + unit.id * .7
+          const movement = unit.moving ? 1 : .22
+          const legSwing = Math.sin(phase) * 5 * movement
+          const armSwing = Math.sin(phase + Math.PI) * 4 * movement
 
           // The Ultra is intentionally drawn as a chunky, readable game
           // silhouette rather than another circular unit marker.
           graphics.fillStyle(0x080d0c, .52 * opacity)
-          graphics.fillEllipse(p.x, p.y + 13, 31, 8)
-          polygon([
-            { x: p.x - 9, y: p.y + 5 },
-            { x: p.x - 4, y: p.y + 5 },
-            { x: p.x - 6, y: p.y + 16 },
-            { x: p.x - 13, y: p.y + 17 },
-            { x: p.x - 10, y: p.y + 12 },
-          ], 0x202626, opacity, DARK)
-          polygon([
-            { x: p.x + 3, y: p.y + 5 },
-            { x: p.x + 9, y: p.y + 4 },
-            { x: p.x + 13, y: p.y + 15 },
-            { x: p.x + 7, y: p.y + 17 },
-            { x: p.x + 1, y: p.y + 11 },
-          ], 0x202626, opacity, DARK)
+          graphics.fillEllipse(p.x, p.y + 13 * scale, 31 * scale, 8 * scale)
+          shape([
+            [-9, 5 + legSwing], [-4, 5 - legSwing], [-6, 16], [-13, 17], [-10, 12],
+          ], 0x202626, opacity)
+          shape([
+            [3, 5 - legSwing], [9, 4 + legSwing], [13, 15], [7, 17], [1, 11],
+          ], 0x202626, opacity)
 
           // Shoulders, raised arms and clenched fists.
-          polygon([
-            { x: p.x - 10, y: p.y - 18 },
-            { x: p.x - 18, y: p.y - 12 },
-            { x: p.x - 21, y: p.y - 3 },
-            { x: p.x - 16, y: p.y - 1 },
-            { x: p.x - 10, y: p.y - 10 },
-          ], 0x343d3c, opacity, DARK)
-          polygon([
-            { x: p.x + 10, y: p.y - 18 },
-            { x: p.x + 18, y: p.y - 12 },
-            { x: p.x + 21, y: p.y - 3 },
-            { x: p.x + 16, y: p.y - 1 },
-            { x: p.x + 10, y: p.y - 10 },
-          ], 0x343d3c, opacity, DARK)
+          shape([
+            [-10, -18], [-18, -12 + armSwing], [-21, -3 + armSwing],
+            [-16, -1 + armSwing], [-10, -10],
+          ], 0x343d3c, opacity)
+          shape([
+            [10, -18], [18, -12 - armSwing], [21, -3 - armSwing],
+            [16, -1 - armSwing], [10, -10],
+          ], 0x343d3c, opacity)
           graphics.fillStyle(skin, opacity)
-          graphics.fillCircle(p.x - 19, p.y - 2, 4)
-          graphics.fillCircle(p.x + 19, p.y - 2, 4)
+          const leftFist = point(-19, -2 + armSwing)
+          const rightFist = point(19, -2 - armSwing)
+          graphics.fillCircle(leftFist.x, leftFist.y, 4 * scale)
+          graphics.fillCircle(rightFist.x, rightFist.y, 4 * scale)
 
           // Dark fan jacket with the team scarf across the chest.
-          polygon([
-            { x: p.x - 12, y: p.y - 19 },
-            { x: p.x - 7, y: p.y - 24 },
-            { x: p.x + 7, y: p.y - 24 },
-            { x: p.x + 12, y: p.y - 18 },
-            { x: p.x + 10, y: p.y + 6 },
-            { x: p.x, y: p.y + 10 },
-            { x: p.x - 11, y: p.y + 6 },
-          ], jersey, opacity, DARK)
+          shape([
+            [-12, -19], [-7, -24], [7, -24], [12, -18],
+            [10, 6], [0, 10], [-11, 6],
+          ], jersey, opacity)
           graphics.fillStyle(scarf, opacity)
-          graphics.fillRect(p.x - 11, p.y - 13, 22, 6)
+          graphics.fillRect(p.x - 11 * scale, p.y - 13 * scale, 22 * scale, 6 * scale)
           graphics.fillStyle(0xd0c18e, .8 * opacity)
-          graphics.fillRect(p.x - 8, p.y - 12, 3, 4)
-          graphics.fillRect(p.x + 5, p.y - 12, 3, 4)
-          line({ x: p.x - 7, y: p.y - 4 }, { x: p.x + 7, y: p.y - 4 }, 0x93958a, 1, .65 * opacity)
-          line({ x: p.x, y: p.y - 7 }, { x: p.x, y: p.y + 7 }, 0x93958a, 1, .55 * opacity)
+          graphics.fillRect(p.x - 8 * scale, p.y - 12 * scale, 3 * scale, 4 * scale)
+          graphics.fillRect(p.x + 5 * scale, p.y - 12 * scale, 3 * scale, 4 * scale)
+          stroke([-7, -4], [7, -4], 0x93958a, 1, .65 * opacity)
+          stroke([0, -7], [0, 7], 0x93958a, 1, .55 * opacity)
 
           // Hood/balaclava and the exposed eyes make the character readable
           // even when several Ultras are deployed together.
           graphics.fillStyle(0x182226, opacity)
-          graphics.fillCircle(p.x, p.y - 31, 13)
+          graphics.fillCircle(p.x, p.y - 31 * scale, 13 * scale)
           graphics.fillStyle(skin, opacity)
-          graphics.fillRoundedRect(p.x - 10, p.y - 32, 20, 9, 3)
+          graphics.fillRoundedRect(p.x - 10 * scale, p.y - 32 * scale, 20 * scale, 9 * scale, 3 * scale)
           graphics.fillStyle(DARK, opacity)
-          graphics.fillRect(p.x - 7, p.y - 30, 4, 2)
-          graphics.fillRect(p.x + 3, p.y - 30, 4, 2)
-          line({ x: p.x - 6, y: p.y - 25 }, { x: p.x + 6, y: p.y - 25 }, 0x070f12, 2.5, opacity)
-          line({ x: p.x - 8, y: p.y - 38 }, { x: p.x + 8, y: p.y - 38 }, scarf, 2, opacity)
-          line({ x: p.x - 10, y: p.y - 36 }, { x: p.x - 13, y: p.y - 27 }, scarf, 2, opacity)
-          line({ x: p.x + 10, y: p.y - 36 }, { x: p.x + 13, y: p.y - 27 }, scarf, 2, opacity)
+          graphics.fillRect(p.x - 7 * scale, p.y - 30 * scale, 4 * scale, 2 * scale)
+          graphics.fillRect(p.x + 3 * scale, p.y - 30 * scale, 4 * scale, 2 * scale)
+          stroke([-6, -25], [6, -25], 0x070f12, 2.5, opacity)
+          stroke([-8, -38], [8, -38], scarf, 2, opacity)
+          stroke([-10, -36], [-13, -27], scarf, 2, opacity)
+          stroke([10, -36], [13, -27], scarf, 2, opacity)
         }
 
         const drawUnit = (unit: Game['units'][number], ghost = false) => {
@@ -314,10 +307,11 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
             graphics.strokeCircle(p.x, p.y, radius)
           }
           graphics.fillStyle(DARK, .8)
-          const barWidth = unit.card.name === 'Der Ultra' ? 28 : 20
-          graphics.fillRect(p.x - barWidth / 2, p.y + 20, barWidth, 3)
+          const barWidth = unit.card.name === 'Der Ultra' ? 24 : 20
+          const barY = unit.card.name === 'Der Ultra' ? 17 : 20
+          graphics.fillRect(p.x - barWidth / 2, p.y + barY, barWidth, 3)
           graphics.fillStyle(color, ghost ? .5 : 1)
-          graphics.fillRect(p.x - barWidth / 2, p.y + 20, barWidth * Math.max(0, unit.hp / unit.card.hp), 3)
+          graphics.fillRect(p.x - barWidth / 2, p.y + barY, barWidth * Math.max(0, unit.hp / unit.card.hp), 3)
         }
 
         const drawEffects = () => {
