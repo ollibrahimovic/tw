@@ -4,6 +4,13 @@ import { fromTile, toTile, insideRect, TILE_BUILDINGS, rectCenter, walkablePoint
 import { cards, deploy, newGame, tick, laneRoute, solidBuildings, canDeploy, FLARE_DAMAGE, BEER_FLIGHT, PUDDLE_LIFETIME, TORCH_FLIGHT, FIRE_LIFETIME } from '../src/game.ts'
 
 const fresh = () => newGame(cards.slice(0, 8).map((_, i) => i))
+const ready = game => {
+  for (const unit of game.units) {
+    unit.spawnDelay = 0
+    unit.spawnDuration = 0
+  }
+  return game
+}
 test('building footprints reject deployment, but allow spells and destroyed buildings', () => {
   const g = fresh()
   assert.equal(canDeploy(g, cards[0], 24, 13), false)
@@ -33,10 +40,9 @@ test('crowd separation and long movement ticks cannot leave units inside buildin
   let g = deploy(fresh(), 0, 12, 13)
   g.aiClock = 10000
   g.units[0].hp = 100000
-  g.units.push({ ...g.units[0], id: 1000, x: 24, y: 13 })
-  g.structures.push({ id: 2000, side: 'blue', x: 37, y: 22, card: cards[16], hp: 600, max: 600, cooldown: 100, age: 0 })
-  for (let i = 0; i < 10; i++) {
-    g = tick(g, 1)
+  g.units.push({ ...g.units[0], id: 1000, x: 30, y: 13 })
+  for (let i = 0; i < 44; i++) {
+    g = tick(g, .23)
     for (const u of g.units) for (const b of solidBuildings(g)) {
       assert.equal(insideRect(u, b.rect), false)
     }
@@ -61,11 +67,12 @@ test('beer stalls decay, spawn cup throwers and can be attacked as buildings', (
   g = deploy(g, 0, 30, 31)
   assert.equal(g.structures.length, 1)
   assert.equal(g.structures[0].hp, 600)
+  assert.equal(g.units.length, 1, 'beer stall deploys its first cup thrower immediately')
   for (let i = 0; i < 99; i++) g = tick(g, .05)
   assert.ok(g.structures[0].hp < 600)
-  assert.equal(g.units.length, 0)
-  g = tick(g, .05)
   assert.equal(g.units.length, 1)
+  g = tick(g, .05)
+  assert.equal(g.units.length, 2)
   g.units = []
   const enemy = { ...deploy(newGame([0]), 0, 30, 31).units[0], id: 900, side: 'red', x: 33, y: 31, cooldown: 0 }
   g.units.push(enemy)
@@ -89,6 +96,7 @@ test('flitzer ignores enemy units and keeps charging buildings', () => {
   g.aiClock = 10000
   g = deploy(g, 0, 30, 31)
   g.units.push({ ...deploy(newGame([0]), 0, 30, 31).units[0], id: 900, side: 'red', x: 31, y: 31, cooldown: 100 })
+  ready(g)
   const x = g.units[0].x
   g = tick(g, .05)
   assert.equal(g.units[0].targetId, undefined)
@@ -100,6 +108,7 @@ test('nearby enemy units are distracted by the flitzer', () => {
   g = deploy(g, 0, 30, 31)
   const enemy = deploy(newGame([0]), 0, 30, 31).units[0]
   g.units.push({ ...enemy, id: 900, side: 'red', x: 35, y: 31, cooldown: 100 })
+  ready(g)
   g = tick(g, .05)
   assert.equal(g.units.find(u => u.id === 900)?.targetId, g.units[0].id)
 })
@@ -191,6 +200,7 @@ test('rooftop bengalos deal damage on impact, splash enemies and respect cooldow
   Object.assign(g.units[0], { x: 74, y: 21, routeIndex: 2, cooldown: 100, card: { ...cards[0], speed: 0 } })
   g.units.push({ ...g.units[0], id: 900, x: 74, y: 24.5 })
   g.units.push({ ...g.units[0], id: 901, x: 80, y: 13, side: 'red' })
+  ready(g)
   const original = g
   g = tick(g, .05)
   assert.equal(g.flares.length, 1)
@@ -217,6 +227,7 @@ test('clubhouse gatling activates only after an own pub falls and rockets damage
     g.aiClock = 10000
     for (const key of ['bluePubOne', 'bluePubTwo', 'redPubOne', 'redPubTwo']) g.buildingCooldown[key] = 100
     Object.assign(g.units[0], { side: side === 'blue' ? 'red' : 'blue', x: side === 'blue' ? 12 : 88, y: 50, hp: 1000, card: { ...cards[0], speed: 0, damage: 0 } })
+    ready(g)
     g = tick(g, .05)
     assert.equal(g.flares.length, 0)
     assert.equal(g.units[0].hp, 1000)
@@ -250,6 +261,7 @@ test('pub guards fire when an enemy has crossed the bridge', () => {
       hp: 1000,
       card: { ...cards[0], speed: 0, damage: 0 },
     })
+    ready(g)
     g = tick(g, .05)
     assert.ok(g.flares.some(flare => flare.source === `${side}PubOne`), `${side} pub should fire across the bridge`)
   }
@@ -260,6 +272,7 @@ test('troops pursue enemies outside weapon range before attacking buildings, the
   g.aiClock = 10000
   Object.assign(g.units[0], { x: 78, y: 26, routeIndex: 2, hp: 10000 })
   g.units.push({ ...g.units[0], id: 900, side: 'red', x: 73, y: 38, hp: 80, cooldown: 100, card: { ...cards[0], speed: 0, damage: 0 } })
+  ready(g)
   const before = Math.hypot(78 - 73, 26 - 38)
   g = tick(g, .05)
   assert.equal(g.units[0].targetId, 900)
@@ -278,6 +291,7 @@ test('pursuit crosses the canal through a bridge instead of cutting through wate
   g.aiClock = 10000
   Object.assign(g.units[0], { x: 42, y: 40, routeIndex: 0, hp: 10000 })
   g.units.push({ ...g.units[0], id: 900, side: 'red', x: 58, y: 40, hp: 10000, cooldown: 100, card: { ...cards[0], speed: 0, damage: 0 } })
+  ready(g)
   let crossed = false
   for (let i = 0; i < 200; i++) {
     g = tick(g, .05)
@@ -295,6 +309,7 @@ test('pursuit crosses the canal through a bridge instead of cutting through wate
 test('units expose their upward-facing back and Ultra hits create a blood splash', () => {
   let g = deploy(fresh(), 0, 30, 22)
   g.aiClock = 10000
+  ready(g)
   g = tick(g, .1)
   assert.equal(g.units[0].facingBack, true)
   g.units.push({ ...g.units[0], id: 900, side: 'red', x: g.units[0].x + 1, y: g.units[0].y, hp: 1000 })
@@ -307,6 +322,7 @@ test('nearby units spread sideways instead of occupying the same spot', () => {
   let g = deploy(fresh(), 0, 30, 22)
   g.aiClock = 10000
   g.units.push({ ...g.units[0], id: 900, x: 30, y: 22, side: 'red', hp: 1000 })
+  ready(g)
   g = tick(g, .05)
   const a = g.units.find(u => u.id !== 900)
   const b = g.units.find(u => u.id === 900)
@@ -341,11 +357,23 @@ test('new spell cards fly to their target and new unit cards deploy groups', () 
 
 test('group spawns are staggered instead of appearing all at once', () => {
   let g = deploy(newGame([14]), 0, 30, 22)
-  assert.deepEqual(g.units.map(unit => unit.spawnDelay), [0, .16, .32, .48])
+  assert.deepEqual(g.units.map(unit => unit.spawnDelay), [1, 1.16, 1.32, 1.48])
+  assert.equal(g.units.length, 4, 'all group members are placed immediately')
+  const waitingPosition = { x: g.units[1].x, y: g.units[1].y }
   g = tick(g, .1)
+  assert.equal(g.units.filter(unit => (unit.spawnDelay ?? 0) <= 0).length, 0)
+  assert.deepEqual({ x: g.units[1].x, y: g.units[1].y }, waitingPosition, 'waiting members stay at their deployment point')
+  g = tick(g, .9)
   assert.equal(g.units.filter(unit => (unit.spawnDelay ?? 0) <= 0).length, 1)
-  g = tick(g, .4)
+  g = tick(g, .48)
   assert.equal(g.units.filter(unit => (unit.spawnDelay ?? 0) <= 0).length, 4)
+})
+
+test('tanks have a longer deployment wait than regular units', () => {
+  const regular = deploy(newGame([0]), 0, 30, 22).units[0]
+  const tank = deploy(newGame([20]), 0, 30, 22).units[0]
+  assert.equal(regular.spawnDelay, 1)
+  assert.equal(tank.spawnDelay, 2)
 })
 
 test('Fanmarsch ignores enemy units and only deals light damage to buildings', () => {
@@ -355,6 +383,7 @@ test('Fanmarsch ignores enemy units and only deals light damage to buildings', (
   const tank = g.units[0]
   Object.assign(tank, { x: 78, y: 13, routeIndex: 2, hp: cards[20].hp })
   g.units.push({ ...tank, id: 900, side: 'red', x: 79, y: 13, hp: 1000, cooldown: 100, card: { ...cards[0], speed: 0, damage: 999 } })
+  ready(g)
   const enemyHp = g.units[1].hp
   const pubHp = g.hp.redPubOne
   g = tick(g, .05)
@@ -379,6 +408,7 @@ test('faster friendly units stay behind the Fanmarsch unless distracted', () => 
     cooldown: 100,
     targetId: undefined,
   })
+  ready(g)
   for (let i = 0; i < 120; i++) {
     g = tick(g, .05)
     const fast = g.units.find(unit => unit.id === follower.id)
@@ -404,6 +434,7 @@ test('the formation advances once the Fanmarsch reaches a building', () => {
     cooldown: 100,
     targetId: undefined,
   })
+  ready(g)
   g = tick(g, .05)
   assert.ok(g.units[0].x > 60.15, 'the follower should use its own speed after the tank stops')
 })
@@ -413,6 +444,7 @@ test('smoke bomb heavily slows and lightly damages enemy troops', () => {
   g.aiClock = 10000
   const enemy = { ...deploy(newGame([0]), 0, 30, 22).units[0], id: 900, side: 'red', x: 70, y: 22, hp: 1000, cooldown: 100 }
   g.units.push(enemy)
+  ready(g)
   const beforeX = enemy.x
   g = tick(g, .5)
   assert.ok(g.units[0].hp < 1000, 'smoke bomb deals light area damage')
@@ -424,6 +456,7 @@ test('beer flies before damaging a unit, leaves a puddle and expires without rep
   g.aiClock = 10000
   for (const key of ['bluePubOne', 'bluePubTwo', 'redPubOne', 'redPubTwo']) g.buildingCooldown[key] = 100
   g.units.push({ ...g.units[0], id: 900, side: 'red', x: 35, cooldown: 100, card: { ...cards[0], speed: 0 }, hp: 430 })
+  ready(g)
   g = tick(g, .05)
   assert.equal(g.beers.length, 1)
   assert.equal(g.units[1].hp, 430)
@@ -448,6 +481,7 @@ test('beer also impacts buildings and safely lands if a unit target disappears',
   let g = deploy(fresh(), 2, 30, 31)
   g.aiClock = 10000
   Object.assign(g.units[0], { x: 70, y: 13, routeIndex: 2 })
+  ready(g)
   g = tick(g, .05)
   assert.equal(g.beers[0].target, 'redPubOne')
   assert.equal(g.hp.redPubOne, 1200)
@@ -467,6 +501,7 @@ test('pyro throws before impact, applies enemy-only splash and leaves temporary 
   g.units.push({ ...stationary, id: 900, side: 'red', x: 38, y: 45 })
   g.units.push({ ...stationary, id: 901, side: 'red', x: 39, y: 47 })
   g.units.push({ ...stationary, id: 902, side: 'blue', x: 38, y: 47 })
+  ready(g)
   g = tick(g, .05)
   assert.equal(g.torches.length, 1)
   assert.equal(g.units[1].hp, 1000)
@@ -493,6 +528,7 @@ test('pyro torch hits buildings after flight and still lands if the thrower dies
   let g = deploy(newGame([7, 0, 1, 2, 3, 4, 5, 6]), 0, 30, 31)
   g.aiClock = 10000
   Object.assign(g.units[0], { x: 73, y: 13, routeIndex: 2 })
+  ready(g)
   g = tick(g, .05)
   assert.equal(g.torches[0].target, 'redPubOne')
   assert.equal(g.hp.redPubOne, 1200)

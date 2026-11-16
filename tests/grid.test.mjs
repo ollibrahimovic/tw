@@ -51,6 +51,7 @@ test('deployment snaps to tiles but subsequent movement remains continuous', () 
   const initial = toTile(game.units[0])
   assert.ok(Math.abs(initial.x - 7) < 1e-10 && Math.abs(initial.y - 20) < 1e-10)
   game.aiClock = 10000
+  game.units[0].spawnDelay = 0
   game = tick(game, .05)
   const moved = toTile(game.units[0])
   assert.ok(Math.abs(moved.y - Math.round(moved.y)) > .001)

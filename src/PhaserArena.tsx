@@ -72,6 +72,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
         const sprites = new Map<string, PhaserType.GameObjects.Image>()
         const usedSprites = new Set<string>()
         const bars = this.add.graphics().setDepth(10)
+        const spawnIndicators = this.add.graphics().setDepth(11)
         const atmosphere = this.add.graphics().setDepth(.25)
         const showArt = (id: string, key: string, p: Point, character: boolean, alpha = 1, depth = 1) => {
           if (!this.textures.exists(key)) return false
@@ -565,7 +566,22 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
            const barY = unit.card.name === 'Der Ultra' ? -48 : -22
           graphics.fillRect(p.x - barWidth / 2, p.y + barY, barWidth, 3)
           graphics.fillStyle(color, ghost ? .5 : 1)
-          graphics.fillRect(p.x - barWidth / 2, p.y + barY, barWidth * Math.max(0, unit.hp / unit.card.hp), 3)
+           graphics.fillRect(p.x - barWidth / 2, p.y + barY, barWidth * Math.max(0, unit.hp / unit.card.hp), 3)
+         }
+        const drawSpawnIndicator = (unit: Game['units'][number]) => {
+          const remaining = unit.spawnDelay ?? 0
+          if (remaining <= 0) return
+          const duration = unit.spawnDuration ?? .48
+          const progress = Math.max(0, Math.min(1, remaining / Math.max(.16, duration)))
+          const p = toScreen(unit.x, unit.y)
+          const radius = unit.card.name === 'Der Ultra' ? 25 : unit.card.name === 'Flitzer' ? 18 : 15
+          const pulse = 1 + Math.sin(animationClock * .012 + unit.id) * .06
+          spawnIndicators.lineStyle(2, unit.side === 'blue' ? BLUE : RED, .9)
+          spawnIndicators.strokeCircle(p.x, p.y, radius * pulse)
+          spawnIndicators.lineStyle(4, 0xe4d09a, .95)
+          spawnIndicators.arc(p.x, p.y, radius * pulse, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress, false)
+          spawnIndicators.fillStyle(0x101815, .8)
+          spawnIndicators.fillCircle(p.x, p.y, 2.5)
         }
 
         const drawEffects = () => {
@@ -684,7 +700,12 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
               p, false, 1, structure.hp <= 0 ? .4 : 1 + p.y / this.scale.height)
             healthBar(p, structure.hp, structure.max, structure.side, 32)
           }
-          for (const unit of gameRef.current.units) if (unit.hp > 0 && (unit.spawnDelay ?? 0) <= 0) drawUnit(unit)
+          spawnIndicators.clear()
+          for (const unit of gameRef.current.units) {
+            if (unit.hp <= 0) continue
+            drawUnit(unit)
+            drawSpawnIndicator(unit)
+          }
           drawEffects()
           drawPlacement()
           for (const [id, sprite] of sprites) {
