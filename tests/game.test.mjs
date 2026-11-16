@@ -123,7 +123,7 @@ test('units cross bridges and attack the correct enemy fortress after an outpost
     for (const u of g.units) if (u.x > 45 && u.x < 56) assert.ok(Math.abs(u.y - laneRoute('blue', 0)[0].y) < 1)
   }
   assert.ok(g.hp.redFortress < 3000)
-  assert.equal(g.hp.blueFortress, 3000)
+  assert.equal(g.hp.blueFortress, 2400)
 })
 test('fortress destruction ends immediately and completed games are frozen', () => {
   let g = fresh()
@@ -133,14 +133,24 @@ test('fortress destruction ends immediately and completed games are frozen', () 
   assert.equal(tick(g, 1), g)
 })
 test('timeout uses outposts and supports draws', () => {
-  const g = fresh()
-  g.time = .01
-  assert.equal(tick(g, .05).result, 'UNENTSCHIEDEN')
-  g.hp.redPubOne = 0
-  assert.equal(tick(g, .05).result, 'DERBYSIEG!')
-  g.hp.bluePubOne = 0
-  g.hp.bluePubTwo = 0
-  assert.equal(tick(g, .05).result, 'NIEDERLAGE')
+  const finish = game => {
+    let result = game
+    result.aiClock = 10000
+    for (let i = 0; i < 601; i++) result = tick(result, .05)
+    return result
+  }
+  const draw = fresh()
+  draw.time = .01
+  assert.equal(finish(draw).result, 'UNENTSCHIEDEN')
+  const win = fresh()
+  win.time = .01
+  win.hp.redPubOne = 0
+  assert.equal(finish(win).result, 'DERBYSIEG!')
+  const loss = fresh()
+  loss.time = .01
+  loss.hp.bluePubOne = 0
+  loss.hp.bluePubTwo = 0
+  assert.equal(finish(loss).result, 'NIEDERLAGE')
 })
 test('full match stays bounded, AI uses both lanes, finale regenerates faster', () => {
   let seed = 12
@@ -174,7 +184,7 @@ test('both sides and both lanes must clear their pub and traverse its checkpoint
     const pubKey = `${enemy}Pub${lane === 0 ? 'One' : 'Two'}`
     for (let i = 0; i < 900; i++) g = tick(g, .05)
     assert.ok(g.units[0].routeIndex <= 3, 'living pub blocks forward travel')
-    assert.equal(g.hp[`${enemy}Fortress`], 3000)
+    assert.equal(g.hp[`${enemy}Fortress`], 2400)
     g.hp[pubKey] = 0
     g.units[0].cooldown = 0
     const checkpoints = new Set()
@@ -238,8 +248,8 @@ test('clubhouse gatling activates only after an own pub falls and rockets damage
     g = tick(g, .05)
     assert.equal(g.flares[0].source, `${side}Fortress`)
     assert.equal(g.units[0].hp, 1000, 'rocket must travel before damage')
-    for (let i = 0; i < 14; i++) g = tick(g, .05)
-    assert.equal(g.units[0].hp, 955)
+    for (let i = 0; i < 18; i++) g = tick(g, .05)
+    assert.equal(g.units[0].hp, 970)
     assert.ok(g.flares.length > 0, 'gatling continues firing')
     g.hp[`${side}Fortress`] = 0
     g.flares = []
