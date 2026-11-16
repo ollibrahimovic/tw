@@ -1,4 +1,4 @@
-import { memo, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { buildings, canDeploy, cards, laneRoute, FLARE_FLIGHT, FLARE_INTERVAL, GATLING_INTERVAL, BEER_FLIGHT, PUDDLE_LIFETIME, TORCH_FLIGHT, FIRE_LIFETIME, BLOOD_STAIN_LIFETIME, SPELL_FLIGHT } from './game'
 import type { Card, Game, Side } from './game'
 import './pyro.css'
@@ -426,10 +426,18 @@ const VerticalEnvironment = memo(function VerticalEnvironment() {
   </>
 })
 
-export function Arena({ game, selectedCard, active, perspective = 'blue', onPlace }: { game: Game; selectedCard: Card; active: boolean; perspective?: Side; onPlace: (x: number, y: number, drop: boolean) => void }) {
+export function Arena({ game, selectedCard, active, dragging = false, perspective = 'blue', onPlace }: { game: Game; selectedCard: Card; active: boolean; dragging?: boolean; perspective?: Side; onPlace: (x: number, y: number, drop: boolean) => void }) {
   const svg = useRef<SVGSVGElement>(null)
   const [hover, setHover] = useState<{x: number; y: number} | null>(null)
   const [draggingOver, setDraggingOver] = useState(false)
+  const [mobileLayout, setMobileLayout] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 600px)').matches)
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 600px)')
+    const update = () => setMobileLayout(query.matches)
+    update()
+    query.addEventListener('change', update)
+    return () => query.removeEventListener('change', update)
+  }, [])
   const project = (x: number, y: number) => baseProject(perspective === 'red' ? 100 - x : x, y)
   function fromScreen(x: number, y: number) {
     const worldX = (1024 - y) / 8.32
@@ -447,7 +455,7 @@ export function Arena({ game, selectedCard, active, perspective = 'blue', onPlac
     return snapped.x >= 0 && snapped.x < 100 && snapped.y >= 0 && snapped.y < 100 ? snapped : null
   }
   const cellAllowed = (x: number, y: number) => x >= 0 && x < 100 && y >= 0 && y < 100 && canDeploy(game, selectedCard, x, y)
-  const showPlacement = active && draggingOver
+  const showPlacement = active && (dragging || draggingOver)
   const hoverAllowed = hover && cellAllowed(hover.x, hover.y)
   const groundPolygon = (x: number, y: number, size: number) => [[x, y], [x + size, y], [x + size, y + size], [x, y + size]].map(([a, b]) => { const p = project(a, b); return `${p.x},${p.y}` }).join(' ')
   const objects = [
@@ -463,7 +471,7 @@ export function Arena({ game, selectedCard, active, perspective = 'blue', onPlac
      ...game.structures.map(s => ({ key: `structure-${s.id}`, layer: 0, ...project(s.x, s.y), node: <BeerStall side={s.side} kind={s.card.name === 'Würstchenbude' ? 'sausage' : 'beer'} hp={s.hp} max={s.max} /> })),
       ...game.units.map(u => ({ key: String(u.id), layer: 0, ...project(u.x, u.y), node: <><title>{u.card.name} · {Math.ceil(u.hp)} HP</title><g className="arena-troop" transform="scale(.8)">{u.card.name === 'Flitzer' ? <Flitzer side={u.side} moving={u.moving} /> : <Fan card={u.card} side={u.side} moving={u.moving} back={u.facingBack} fighting={u.cooldown > u.card.rate - .2} />}<rect x="-18" y="8" width="36" height="3.5" rx="1" fill="#111c17" stroke="#0b0f0d" strokeWidth=".7" /><rect x="-18" y="8" width={36 * Math.max(0, u.hp) / u.card.hp} height="3.5" rx="1" fill={u.side === 'blue' ? '#6cc8ae' : '#ef805b'} />{u.cooldown > u.card.rate - .2 && <path className="impact-flash" d="M16-23 24-31 22-21 31-19 22-17 23-9 17-17Z" fill="#efd8a0" />}</g></> })),
    ].sort((a, b) => a.layer - b.layer || a.y - b.y)
-   return <svg ref={svg} className="iso-arena vertical-arena" viewBox="180 176 408 864" preserveAspectRatio="xMidYMax slice" role="img" aria-label="Vertikale isometrische Derby-Arena. Deine Clubhäuser sind unten, die Kiez-Clubhäuser oben." onClick={e => { const p = point(e.clientX, e.clientY); if (p) onPlace(p.x, p.y, false) }} onPointerDown={e => setHover(point(e.clientX, e.clientY))} onPointerMove={e => { if (draggingOver) setHover(point(e.clientX, e.clientY)) }} onPointerLeave={() => { setHover(null); setDraggingOver(false) }} onDragEnter={e => { e.preventDefault(); setDraggingOver(true) }} onDragOver={e => { e.preventDefault(); setDraggingOver(true); setHover(point(e.clientX, e.clientY)) }} onDragLeave={() => { setHover(null); setDraggingOver(false) }} onDrop={e => { e.preventDefault(); const p = point(e.clientX, e.clientY); if (p) onPlace(p.x, p.y, true); setHover(null); setDraggingOver(false) }}>
+   return <svg ref={svg} className="iso-arena vertical-arena" viewBox="180 40 408 1000" preserveAspectRatio={mobileLayout ? 'none' : 'xMidYMax slice'} role="img" aria-label="Vertikale isometrische Derby-Arena." onPointerDown={e => { if (active) { setDraggingOver(true); setHover(point(e.clientX, e.clientY)) } }} onPointerMove={e => { if (active && (dragging || draggingOver)) setHover(point(e.clientX, e.clientY)) }} onPointerUp={e => { const p = point(e.clientX, e.clientY); if (p && active) onPlace(p.x, p.y, dragging); setHover(null); setDraggingOver(false) }} onPointerCancel={() => { setHover(null); setDraggingOver(false) }} onPointerLeave={() => { if (!dragging) { setHover(null); setDraggingOver(false) } }} onDragEnter={e => { e.preventDefault(); setDraggingOver(true) }} onDragOver={e => { e.preventDefault(); setDraggingOver(true); setHover(point(e.clientX, e.clientY)) }} onDragLeave={() => { setHover(null); setDraggingOver(false) }} onDrop={e => { e.preventDefault(); const p = point(e.clientX, e.clientY); if (p) onPlace(p.x, p.y, true); setHover(null); setDraggingOver(false) }}>
     <VerticalEnvironment />
     <g pointerEvents="none">
       <polygon points={groundPolygon(0, 0, 100)} fill="none" stroke="#101c17" strokeWidth="7" />
