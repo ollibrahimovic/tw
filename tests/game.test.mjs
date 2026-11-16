@@ -1,8 +1,47 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { cards, deploy, newGame, tick, laneRoute, FLARE_DAMAGE, BEER_FLIGHT, PUDDLE_LIFETIME, TORCH_FLIGHT, FIRE_LIFETIME } from '../src/game.ts'
+import { fromTile, toTile, insideRect, TILE_BUILDINGS, rectCenter, walkablePoint } from '../src/grid.ts'
+import { cards, deploy, newGame, tick, laneRoute, solidBuildings, canDeploy, FLARE_DAMAGE, BEER_FLIGHT, PUDDLE_LIFETIME, TORCH_FLIGHT, FIRE_LIFETIME } from '../src/game.ts'
 
 const fresh = () => newGame(cards.slice(0, 8).map((_, i) => i))
+test('building footprints reject deployment, but allow spells and destroyed buildings', () => {
+  const g = fresh()
+  assert.equal(canDeploy(g, cards[0], 24, 13), false)
+  const pub = rectCenter(TILE_BUILDINGS.bluePubOne)
+  assert.equal(canDeploy(g, cards[16], pub.x, pub.y), false)
+  assert.equal(canDeploy(g, cards[8], 24, 13), true)
+  g.hp.bluePubOne = 0
+  assert.equal(canDeploy(g, cards[0], 24, 13), true)
+})
+
+test('units detour around friendly pubs on both sides without getting stuck', () => {
+  for (const side of ['blue', 'red']) {
+    let g = deploy(fresh(), 0, side === 'blue' ? 12 : 88, 13, side)
+    g.aiClock = 10000
+    g.units[0].hp = 100000
+    for (let i = 0; i < 400; i++) {
+      g = tick(g, .05)
+      for (const b of solidBuildings(g)) {
+        assert.equal(insideRect(g.units[0], b.rect), false)
+      }
+    }
+    assert.ok(side === 'blue' ? g.units[0].x > 40 : g.units[0].x < 60, 'must make forward progress')
+  }
+})
+
+test('crowd separation and long movement ticks cannot leave units inside buildings', () => {
+  let g = deploy(fresh(), 0, 12, 13)
+  g.aiClock = 10000
+  g.units[0].hp = 100000
+  g.units.push({ ...g.units[0], id: 1000, x: 24, y: 13 })
+  g.structures.push({ id: 2000, side: 'blue', x: 37, y: 22, card: cards[16], hp: 600, max: 600, cooldown: 100, age: 0 })
+  for (let i = 0; i < 10; i++) {
+    g = tick(g, 1)
+    for (const u of g.units) for (const b of solidBuildings(g)) {
+      assert.equal(insideRect(u, b.rect), false)
+    }
+  }
+})
 test('deployment spends hype, rotates hand and rejects enemy territory', () => {
   const g = fresh()
   assert.equal(deploy(g, 0, 70, 40), g)
@@ -146,10 +185,11 @@ test('both sides and both lanes must clear their pub and traverse its checkpoint
 })
 
 test('rooftop bengalos deal damage on impact, splash enemies and respect cooldown', () => {
-  let g = deploy(fresh(), 0, 30, 13)
+  let g = deploy(fresh(), 0, 30, 31)
   g.aiClock = 10000
-  Object.assign(g.units[0], { x: 75, y: 13, routeIndex: 2, cooldown: 100 })
-  g.units.push({ ...g.units[0], id: 900, x: 76, y: 14 })
+  // Stationary targets outside the solid pub, spaced beyond crowd separation.
+  Object.assign(g.units[0], { x: 74, y: 21, routeIndex: 2, cooldown: 100, card: { ...cards[0], speed: 0 } })
+  g.units.push({ ...g.units[0], id: 900, x: 74, y: 24.5 })
   g.units.push({ ...g.units[0], id: 901, x: 80, y: 13, side: 'red' })
   const original = g
   g = tick(g, .05)
@@ -175,6 +215,7 @@ test('clubhouse gatling activates only after an own pub falls and rockets damage
   for (const side of ['blue', 'red']) {
     let g = deploy(newGame([0]), 0, 30, 22)
     g.aiClock = 10000
+    for (const key of ['bluePubOne', 'bluePubTwo', 'redPubOne', 'redPubTwo']) g.buildingCooldown[key] = 100
     Object.assign(g.units[0], { side: side === 'blue' ? 'red' : 'blue', x: side === 'blue' ? 12 : 88, y: 50, hp: 1000, card: { ...cards[0], speed: 0, damage: 0 } })
     g = tick(g, .05)
     assert.equal(g.flares.length, 0)
@@ -223,9 +264,10 @@ test('pursuit crosses the canal through a bridge instead of cutting through wate
   for (let i = 0; i < 200; i++) {
     g = tick(g, .05)
     const u = g.units[0]
-    if (u.x > 44 && u.x < 56) {
+    const tile = toTile(u)
+    if (tile.y > 14.5 && tile.y < 16.5) {
       crossed = true
-      assert.ok(Math.abs(u.y - 22) <= 3.5, 'pursuit stays on the bridge')
+      assert.ok(walkablePoint(u), 'pursuit stays on the bridge')
     }
   }
   assert.ok(crossed)
@@ -369,7 +411,7 @@ test('pyro torch hits buildings after flight and still lands if the thrower dies
   g = tick(g, TORCH_FLIGHT)
   assert.equal(g.hp.redPubOne, 1200 - cards[7].damage)
   assert.equal(g.fires.length, 1)
-  assert.equal(g.fires[0].x, 76)
-  assert.equal(g.fires[0].y, 13)
+  assert.equal(g.fires[0].x, rectCenter(TILE_BUILDINGS.redPubOne).x)
+  assert.equal(g.fires[0].y, rectCenter(TILE_BUILDINGS.redPubOne).y)
   assert.equal(newGame([0,1,2,3,4,5,6,7]).fires.length, 0)
 })

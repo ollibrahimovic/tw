@@ -1,17 +1,21 @@
 import { useEffect, useRef } from 'react'
 import type PhaserType from 'phaser'
-import { buildings, canDeploy } from './game'
+import { buildings, canDeploy, cards } from './game'
 import type { Card, Game, Side } from './game'
+import { createArenaEffects } from './phaserEffects'
+import { fromTile, snapToTile, validTile } from './grid.ts'
 
 type PhaserArenaProps = {
   game: Game
   selectedCard: Card
   active: boolean
+  dragging?: boolean
   perspective?: Side
   onPlace: (x: number, y: number, drop: boolean) => void
 }
 
 type ArenaScene = PhaserType.Scene & {
+  preload: () => void
   create: () => void
   renderArena?: () => void
 }
@@ -37,17 +41,19 @@ function cardColor(card: Card) {
  * state into pixels and owns pointer input, so it can eventually replace the
  * SVG arena without changing multiplayer or simulation code.
  */
-export function PhaserArena({ game, selectedCard, active, perspective = 'blue', onPlace }: PhaserArenaProps) {
+export function PhaserArena({ game, selectedCard, active, dragging = false, perspective = 'blue', onPlace }: PhaserArenaProps) {
   const host = useRef<HTMLDivElement>(null)
   const gameRef = useRef(game)
   const selectedRef = useRef(selectedCard)
   const activeRef = useRef(active)
+  const draggingRef = useRef(dragging)
   const perspectiveRef = useRef(perspective)
   const onPlaceRef = useRef(onPlace)
 
   gameRef.current = game
   selectedRef.current = selectedCard
   activeRef.current = active
+  draggingRef.current = dragging
   perspectiveRef.current = perspective
   onPlaceRef.current = onPlace
 
@@ -56,25 +62,52 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
 
     let instance: PhaserType.Game | undefined
     let disposed = false
-    void import('phaser').then(({ default: Phaser }) => {
+    void Promise.all([import('phaser'), import('./phaserArt')]).then(([{ default: Phaser }, { artHealth, loadArenaArt }]) => {
       if (disposed || !host.current) return
 
       const scene = new Phaser.Scene('TerraceWarsArena') as ArenaScene
+      scene.preload = function () { loadArenaArt(this) }
       scene.create = function () {
         const graphics = this.add.graphics()
+        const sprites = new Map<string, PhaserType.GameObjects.Image>()
+        const usedSprites = new Set<string>()
+        const bars = this.add.graphics().setDepth(10)
+        const showArt = (id: string, key: string, p: Point, character: boolean, alpha = 1, depth = 1) => {
+          if (!this.textures.exists(key)) return false
+          usedSprites.add(id)
+          let sprite = sprites.get(id)
+          if (!sprite) {
+            sprite = this.add.image(0, 0, key)
+            sprites.set(id, sprite)
+          }
+          sprite.setTexture(key).setPosition(p.x, p.y)
+            .setOrigin(.5, character ? .8 : 190 / 240)
+            .setScale(character ? .32 : .28).setAlpha(alpha).setDepth(depth)
+          return true
+        }
+        const healthBar = (p: Point, hp: number, max: number, side: Side, width = 24) => {
+          if (hp <= 0) return
+          bars.fillStyle(DARK, .9).fillRect(p.x - width / 2, p.y + 17, width, 3)
+          bars.fillStyle(side === 'blue' ? BLUE : RED, 1)
+            .fillRect(p.x - width / 2, p.y + 17, width * Math.max(0, Math.min(1, hp / max)), 3)
+        }
         const label = this.add.text(0, 0, '', {
           color: '#dfe7b0',
           fontFamily: 'DM Sans, sans-serif',
           fontSize: '12px',
         }).setDepth(20)
         let hover: Point | null = null
+        let pointerDown = false
         let animationClock = 0
+        let lastState = gameRef.current
+        let stateAge = 0
 
         const metrics = () => {
           const width = this.scale.width
           const height = this.scale.height
           const left = Math.max(18, width * .08)
-          return { width, height, left, top: 18, pitchWidth: width - left * 2, pitchHeight: height - 36 }
+          const top = Math.min(100, height * .18)
+          return { width, height, left, top, pitchWidth: width - left * 2, pitchHeight: height - top - 28 }
         }
 
         const toScreen = (x: number, y: number): Point => {
@@ -86,11 +119,12 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
           }
         }
 
+        const renderWeaponEffects = createArenaEffects(this, toScreen)
         const fromPointer = (pointer: Phaser.Input.Pointer): Point => {
           const m = metrics()
-          const lane = Phaser.Math.Clamp((pointer.x - m.left) / m.pitchWidth * 100, 0, 100)
-          const depth = Phaser.Math.Clamp(100 - (pointer.y - m.top) / m.pitchHeight * 100, 0, 100)
-          return { x: perspectiveRef.current === 'red' ? 100 - depth : depth, y: lane }
+          const lane = (pointer.x - m.left) / m.pitchWidth * 100
+          const depth = 100 - (pointer.y - m.top) / m.pitchHeight * 100
+          return snapToTile({ x: perspectiveRef.current === 'red' ? 100 - depth : depth, y: lane })
         }
 
         const line = (a: Point, b: Point, color: number, width: number, alpha = 1) => {
@@ -119,25 +153,29 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
             const y = m.top + m.pitchHeight * i / 12
             line({ x: m.left, y }, { x: m.left + m.pitchWidth, y }, 0x17251b, 1, .22)
           }
+          if (activeRef.current && selectedRef.current && (draggingRef.current || pointerDown)) {
+            const tileWidth = m.pitchWidth / 18
+            const tileHeight = m.pitchHeight / 32
+            for (let ty = 0; ty <= 31; ty++) for (let tx = 1; tx <= 18; tx++) {
+              if (!validTile(tx, ty)) continue
+              const tile = fromTile({ x: tx, y: ty })
+              const p = toScreen(tile.x, tile.y)
+              const allowed = canDeploy(gameRef.current, selectedRef.current, tile.x, tile.y, perspectiveRef.current)
+              graphics.fillStyle(allowed ? 0x4d9ee8 : 0xc45142, allowed ? .1 : .055)
+              graphics.fillRect(p.x - tileWidth / 2, p.y - tileHeight / 2, tileWidth, tileHeight)
+              graphics.lineStyle(.6, allowed ? 0x8ac7fa : 0xe09a87, allowed ? .3 : .16)
+              graphics.strokeRect(p.x - tileWidth / 2, p.y - tileHeight / 2, tileWidth, tileHeight)
+            }
+          }
 
           // Two shared Clash-style lanes. They start at the clubhouses, pass
           // through the pubs, bend toward the matching fence opening, and
           // continue symmetrically into the opponent's half.
           for (const lane of [0, 1]) {
-            const pubY = lane === 0 ? 13 : 83
-            const bridgeY = lane === 0 ? 22 : 74
-            const points = [
-              toScreen(5, 50),
-              toScreen(14, 50),
-              toScreen(24, pubY),
-              toScreen(34, pubY),
-              toScreen(44, bridgeY),
-              toScreen(58, bridgeY),
-              toScreen(68, pubY),
-              toScreen(76, pubY),
-              toScreen(86, pubY),
-              toScreen(95, 50),
-            ]
+            const x = lane === 0 ? 4 : 15
+            const points = [{ x: 9.5, y: 28.5 }, { x, y: 25 }, { x, y: 18 },
+              { x, y: 13 }, { x, y: 6 }, { x: 9.5, y: 2.5 }]
+              .map(t => { const p = fromTile(t); return toScreen(p.x, p.y) })
             line(points[0], points[1], 0x172018, 25, .95)
             for (let i = 1; i < points.length; i++) {
               line(points[i - 1], points[i], 0x172018, 25, .95)
@@ -147,8 +185,8 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
           }
 
           const fenceY = m.top + m.pitchHeight * .5
-          const openings = [22, 74].map(lane => m.left + m.pitchWidth * lane / 100)
-          const openingWidth = Math.max(34, m.pitchWidth * .1)
+          const openings = [4, 15].map(lane => m.left + m.pitchWidth * (lane - .5) / 18)
+          const openingWidth = m.pitchWidth * 3 / 18
           const fenceSegments: Array<[number, number]> = [
             [m.left, openings[0] - openingWidth / 2],
             [openings[0] + openingWidth / 2, openings[1] - openingWidth / 2],
@@ -172,6 +210,31 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
 
         const drawBuilding = (building: typeof buildings[number]) => {
           const hp = gameRef.current.hp[building.key]
+          const activated = gameRef.current.hp[`${building.side}PubOne`] <= 0 ||
+            gameRef.current.hp[`${building.side}PubTwo`] <= 0
+          const at = toScreen(building.x, building.y)
+          const fortressArt = building.key.includes('Fortress')
+          const shot = gameRef.current.flares.find(flare => flare.source === building.key)
+          const firing = !!shot && shot.age + stateAge < .18
+          const artKey = !fortressArt && firing ? `pub-throw-${building.side}-${artHealth(hp, building.max)}` :
+            `club-${building.side}-${fortressArt}-false-${artHealth(hp, building.max)}`
+          if (showArt(building.key,
+            artKey,
+            // Rubble is ground decoration, never part of the actor depth sort.
+            // Ground: 0, rubble: .4, puddles: .5, actors: 1–2, airborne FX: 5.
+            at, false, 1, hp <= 0 ? .4 : 1 + at.y / this.scale.height)) {
+            if (fortressArt && activated && hp > 0) {
+              const enemy = shot ?? gameRef.current.units.filter(u => u.side !== building.side && u.hp > 0)
+                .sort((a, b) => Math.hypot(a.x - building.x, a.y - building.y) - Math.hypot(b.x - building.x, b.y - building.y))[0]
+              const end = enemy ? toScreen(enemy.x, enemy.y) : { x: at.x, y: at.y + (building.side === perspectiveRef.current ? -100 : 100) }
+              const angle = Math.atan2(end.y - 12 - (at.y - 61.47), end.x - at.x - 1.48)
+              const aim = (Math.round(angle / (Math.PI / 4)) + 8) % 8
+              showArt(`${building.key}-guard`, `gatling-${building.side}-${aim}-${firing}`,
+                at, false, 1, 1.001 + at.y / this.scale.height)
+            }
+            healthBar(at, hp, building.max, building.side, 36)
+            return
+          }
           if (hp <= 0) return
           const p = toScreen(building.x, building.y)
           const fortress = building.key.includes('Fortress')
@@ -350,6 +413,17 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
 
         const drawUnit = (unit: Game['units'][number], ghost = false) => {
           const p = toScreen(unit.x, unit.y)
+          const index = cards.findIndex(card => card.name === unit.card.name)
+          // facingBack is side-relative in the simulation; convert to camera space.
+          const back = ghost ? true : unit.side === perspectiveRef.current ? unit.facingBack : !unit.facingBack
+          const pose = ghost ? 0 : unit.moving ? 1 + Math.floor(animationClock / 160 + unit.id) % 2 :
+            unit.cooldown > unit.card.rate - .2 ? 3 : 0
+          if (showArt(ghost ? 'preview' : `unit-${unit.id}`,
+            `fan-${index}-${unit.side}-${back}-${pose}`, p, true, ghost ? .48 : 1,
+            ghost ? 9 : 1 + p.y / this.scale.height)) {
+            if (!ghost) healthBar(p, unit.hp, unit.card.hp, unit.side)
+            return
+          }
           const color = unit.side === 'blue' ? BLUE : RED
           const radius = unit.card.name === 'Flitzer' ? 11 : 8
           if (unit.card.name === 'Der Ultra') drawUltra(unit, ghost)
@@ -396,36 +470,26 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
               graphics.fillCircle(particle.x, particle.y, Math.max(1, 2.6 - blood.age * 2))
             }
           }
-          for (const flare of current.flares) {
-            const source = buildings.find(building => building.key === flare.source)
-            if (!source) continue
-            const start = toScreen(source.x, source.y)
-            const end = toScreen(flare.x, flare.y)
-            const progress = Phaser.Math.Clamp(flare.age / .65, 0, 1)
-            const p = {
-              x: start.x + (end.x - start.x) * progress,
-              y: start.y + (end.y - start.y) * progress - 28 * Math.sin(Math.PI * progress),
-            }
-            graphics.fillStyle(0xffbd62, 1)
-            graphics.fillCircle(p.x, p.y, 5)
-            line({ x: p.x - 10, y: p.y + 6 }, p, 0xe89b64, 2, .65)
-          }
-          for (const impact of current.impacts) {
-            const p = toScreen(impact.x, impact.y)
-            const radius = 8 + impact.age * 38
-            graphics.lineStyle(2, 0xffcf80, Math.max(0, 1 - impact.age / .45))
-            graphics.strokeCircle(p.x, p.y, radius)
-          }
+          renderWeaponEffects(current, stateAge, animationClock / 1000)
         }
 
         const drawPlacement = () => {
           if (!activeRef.current || !hover) return
           const allowed = canDeploy(gameRef.current, selectedRef.current, hover.x, hover.y, perspectiveRef.current)
           const p = toScreen(hover.x, hover.y)
+          const m = metrics()
+          const tileWidth = m.pitchWidth / 18
+          const tileHeight = m.pitchHeight / 32
           graphics.fillStyle(allowed ? 0x82f4c0 : 0xef6354, .22)
-          graphics.fillRect(p.x - 16, p.y - 16, 32, 32)
+          graphics.fillRect(p.x - tileWidth / 2, p.y - tileHeight / 2, tileWidth, tileHeight)
           graphics.lineStyle(2, allowed ? 0xdfffe8 : 0xff9b8e, .8)
-          graphics.strokeRect(p.x - 16, p.y - 16, 32, 32)
+          graphics.strokeRect(p.x - tileWidth / 2, p.y - tileHeight / 2, tileWidth, tileHeight)
+          if (selectedRef.current.kind === 'building') {
+            showArt('preview', `stall-${perspectiveRef.current}-${selectedRef.current.name === 'Würstchenbude' ? 'sausage' : 'beer'}-100`,
+              p, false, .48, 9)
+            return
+          }
+          if (selectedRef.current.kind === 'spell') return
           const ghost = { x: hover.x, y: hover.y } as Game['units'][number]
           ghost.card = selectedRef.current
           ghost.side = perspectiveRef.current
@@ -434,27 +498,56 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
         }
 
         this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+          if (pointer.isDown || draggingRef.current) pointerDown = true
           hover = fromPointer(pointer)
         })
+        this.input.on('pointerdown', () => { pointerDown = true })
         this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
           if (!activeRef.current) return
           const target = fromPointer(pointer)
           if (canDeploy(gameRef.current, selectedRef.current, target.x, target.y, perspectiveRef.current)) {
             onPlaceRef.current(target.x, target.y, false)
           }
+          pointerDown = false
+          hover = null
+        })
+        this.input.on('pointerout', () => {
+          if (!draggingRef.current) {
+            pointerDown = false
+            hover = null
+          }
         })
 
         scene.renderArena = () => {
+          usedSprites.clear()
+          bars.clear()
           graphics.clear()
           drawPitch()
           for (const building of buildings) drawBuilding(building)
+          for (const structure of gameRef.current.structures) {
+            const p = toScreen(structure.x, structure.y)
+            showArt(`structure-${structure.id}`,
+              `stall-${structure.side}-${structure.card.name === 'Würstchenbude' ? 'sausage' : 'beer'}-${artHealth(structure.hp, structure.max)}`,
+              p, false, 1, structure.hp <= 0 ? .4 : 1 + p.y / this.scale.height)
+            healthBar(p, structure.hp, structure.max, structure.side, 32)
+          }
           for (const unit of gameRef.current.units) if (unit.hp > 0) drawUnit(unit)
           drawEffects()
           drawPlacement()
+          for (const [id, sprite] of sprites) {
+            if (!usedSprites.has(id)) {
+              sprite.destroy()
+              sprites.delete(id)
+            }
+          }
           label.setPosition(10, 8).setText(`PHASER · ${gameRef.current.units.length} Einheiten · ${gameRef.current.time.toFixed(1)}s`)
         }
         this.events.on(Phaser.Scenes.Events.UPDATE, (_time: number, delta: number) => {
-          animationClock += delta
+          if (lastState !== gameRef.current) {
+            lastState = gameRef.current
+            stateAge = 0
+          } else if (activeRef.current) stateAge = Math.min(.05, stateAge + delta / 1000)
+          if (activeRef.current) animationClock += delta
           scene.renderArena?.()
         })
       }
