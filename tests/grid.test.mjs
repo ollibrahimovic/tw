@@ -85,5 +85,6 @@ test('buildings occupy a centered 2x2 footprint and cannot sit behind the clubho
   assert.equal(canDeploy(g, cards[16], fromTile({ x: 8, y: 30.8 }).x, fromTile({ x: 8, y: 30.8 }).y), false)
   assert.equal(canDeploy({ ...g, hp: { ...g.hp, bluePubOne: 0, bluePubTwo: 0 } }, cards[16], fromTile({ x: 8, y: 30.8 }).x, fromTile({ x: 8, y: 30.8 }).y), false)
   const captured = { ...g, hp: { ...g.hp, redPubOne: 0 } }
-  assert.equal(canDeploy(captured, cards[0], fromTile({ x: 4, y: 6 }).x, fromTile({ x: 4, y: 6 }).y), true)
+  assert.equal(canDeploy(captured, cards[0], fromTile({ x: 4, y: 8 }).x, fromTile({ x: 4, y: 8 }).y), true)
+  assert.equal(canDeploy(captured, cards[0], fromTile({ x: 4, y: 6 }).x, fromTile({ x: 4, y: 6 }).y), false)
 })
