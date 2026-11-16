@@ -204,7 +204,7 @@ function GatlingGuard({ side, throwing, aimAngle }: { side: Side; throwing: bool
   </g>
 }
 
-function Club({ side, fortress, hp, max, throwing, activated, aimAngle }: { side: Side; fortress: boolean; hp: number; max: number; throwing: boolean; activated: boolean; aimAngle: number }) {
+const Club = memo(function Club({ side, fortress, hp, max, throwing, activated, aimAngle }: { side: Side; fortress: boolean; hp: number; max: number; throwing: boolean; activated: boolean; aimAngle: number }) {
   const lastAim = useRef(aimAngle)
   if (throwing) lastAim.current = aimAngle
   const c = side === 'blue' ? '#5baaa0' : '#c46249'
@@ -243,11 +243,11 @@ function Club({ side, fortress, hp, max, throwing, activated, aimAngle }: { side
      </g>
     <rect x="-30" y="18" width="60" height="6" rx="1" fill="#0b1612" stroke="#a6a18a" strokeWidth=".5" />
     <rect x="-29" y="19" width={58 * hp / max} height="4" fill={c} />
-    <text y="36" textAnchor="middle" fill="#ded6bc" fontSize="10" fontWeight="700">{Math.ceil(hp)}</text>
-  </g>
-}
+     <text y="36" textAnchor="middle" fill="#ded6bc" fontSize="10" fontWeight="700">{Math.ceil(hp)}</text>
+   </g>
+ })
 
-function BeerStall({ side, hp, max, kind = 'beer' }: { side: Side; hp: number; max: number; kind?: 'beer' | 'sausage' }) {
+const BeerStall = memo(function BeerStall({ side, hp, max, kind = 'beer' }: { side: Side; hp: number; max: number; kind?: 'beer' | 'sausage' }) {
   const c = side === 'blue' ? '#5baaa0' : '#c46249'
   const sausage = kind === 'sausage'
   const health = Math.max(0, hp / max)
@@ -270,9 +270,9 @@ function BeerStall({ side, hp, max, kind = 'beer' }: { side: Side; hp: number; m
     <text x="8" y="-27" textAnchor="middle" fill="#273226" fontSize="5" fontWeight="900">{sausage ? 'WURST' : 'BIER'}</text>
     {!sausage ? <g transform="translate(15 -47) rotate(-8)"><path d="M-6-5H6L5 7Q0 10-5 7Z" fill="#e7dfb4" stroke="#243027" strokeWidth="1.4" /><path d="M6-2Q12-2 9 4Q7 7 5 5" fill="none" stroke="#e7dfb4" strokeWidth="1.7" /><path d="M-4-5Q0-10 4-5" fill="#f8f0c8" stroke="#243027" strokeWidth="1" /></g> : <g transform="translate(8 -17) rotate(-8)"><path d="M-19 1Q-15-6-7-3L12-2Q20 0 17 6Q14 11 7 8L-12 7Q-20 6-19 1Z" fill="#b95832" stroke="#3a241b" strokeWidth="1.8" /><path d="M-11-1-8 5M-3-2 0 5M5-1 8 6" stroke="#e5b15d" strokeWidth="1.5" strokeLinecap="round" /><path d="M-22 11H20" stroke="#b69a67" strokeWidth="1.5" strokeLinecap="round" /></g>}
     <rect x="-31" y="35" width="62" height="4" rx="1" fill="#0b1612" stroke="#a6a18a" strokeWidth=".5" />
-    <rect x="-30" y="36" width={60 * hp / max} height="2" fill={c} />
-  </g>
-}
+     <rect x="-30" y="36" width={60 * hp / max} height="2" fill={c} />
+   </g>
+ })
 
 function BuildingPlacementPreview({ card }: { card: Card }) {
   return <g transform="scale(.8)" opacity=".8"><BeerStall side="blue" kind={card.name === 'Würstchenbude' ? 'sausage' : 'beer'} hp={card.hp} max={card.hp} /></g>
