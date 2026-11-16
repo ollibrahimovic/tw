@@ -2,7 +2,7 @@ export type Card = { name: string; role: string; cost: number; icon: string; col
 import { fromTile, toTile, snapToTile, validTile, walkablePoint, tileDistance, TILE_BUILDINGS, rectCenter, insideRect } from './grid.ts'
 import type { TileRect } from './grid.ts'
 export type Side = 'blue' | 'red'
-export type Unit = { id: number; lane: number; x: number; y: number; side: Side; card: Card; hp: number; cooldown: number; routeIndex: number; targetId?: number; moving: boolean; facingBack: boolean; lateralOffset?: number }
+export type Unit = { id: number; lane: number; x: number; y: number; side: Side; card: Card; hp: number; cooldown: number; routeIndex: number; targetId?: number; moving: boolean; facingBack: boolean; lateralOffset?: number; spawnDelay?: number }
 export type Structure = { id: number; x: number; y: number; side: Side; card: Card; hp: number; max: number; cooldown: number; age: number }
 export function laneRoute(side: Side, lane: number) {
   const x = lane === 0 ? 4 : 15
@@ -62,8 +62,9 @@ export const cards: Card[] = [
   { name: 'Würstchenverkäufer', role: 'Aggressiver Nahkämpfer aus der Würstchenbude', cost: 0, icon: '♨', color: '#d47b3c', damage: 92, hp: 560, speed: 6.5, range: 3, rate: .7, rarity: 'Rare', hidden: true },
   { name: 'Würstchenbude', role: 'Lockt Gegner an; spawnt beim Einsturz einen Verkäufer', cost: 4, icon: '▤', color: '#b87843', damage: 0, hp: 760, speed: 0, range: 0, rate: 0, rarity: 'Rare', kind: 'building' },
   { name: 'Flitzer', role: 'Langsamer Gebäudetank und Ablenkung', cost: 5, icon: '●', color: '#c58f72', damage: 30, hp: 1500, speed: 2.2, range: 3, rate: 1.2, rarity: 'Epic' },
+  { name: 'Fanmarsch', role: 'Geschlossener Gebäudetank mit Banner', cost: 6, icon: '⚑', color: '#7d8f9b', damage: 12, hp: 2600, speed: 1.55, range: 3, rate: 1.4, rarity: 'Legendary' },
 ]
-export const AI_DECK = [0, 2, 3, 5, 7, 9, 16, 19]
+export const AI_DECK = [0, 2, 3, 5, 7, 9, 16, 20]
 export type BuildingKey = 'blueFortress' | 'redFortress' | 'bluePubOne' | 'bluePubTwo' | 'redPubOne' | 'redPubTwo'
 export const buildings: { key: BuildingKey; side: Side; x: number; y: number; max: number }[] = [
   { key: 'blueFortress', side: 'blue', ...rectCenter(TILE_BUILDINGS.blueFortress), max: 3000 },
@@ -82,8 +83,9 @@ const unitCount = (card: Card) => cards.indexOf(card) === 14 ? 4 : cards.indexOf
 function makeUnits(startId: number, x: number, y: number, side: Side, lane: number, card: Card) {
   const offsets = unitCount(card) === 4 ? [0, -2.8, 2.8, -5.4] : unitCount(card) === 3 ? [0, -3, 3] : [0]
   const routeIndex = side === 'blue' ? x > 58 ? 2 : 0 : x < 42 ? 2 : 0
-  return offsets.map((offset, index) => ({ id: startId + index, x, y: Math.max(4, Math.min(96, y + offset)), lane, card, side, hp: card.hp, cooldown: 0, routeIndex, moving: false, facingBack: false } satisfies Unit))
+  return offsets.map((offset, index) => ({ id: startId + index, x, y: Math.max(4, Math.min(96, y + offset)), lane, card, side, hp: card.hp, cooldown: 0, routeIndex, moving: false, facingBack: false, spawnDelay: index * .16 } satisfies Unit))
 }
+const activeUnit = (unit: Unit) => unit.hp > 0 && (unit.spawnDelay ?? 0) <= 0
 export function canDeploy(g: Game, card: Card, x: number, y: number, side: Side = 'blue') {
   if (!card || !Number.isFinite(x) || !Number.isFinite(y)) return false
   const snapped = snapToTile({ x, y })
@@ -189,10 +191,10 @@ function separateUnits(units: Unit[]) {
   for (let pass = 0; pass < 3; pass++) {
     for (let i = 0; i < units.length; i++) {
       const a = units[i]
-      if (a.hp <= 0) continue
+      if (!activeUnit(a)) continue
       for (let j = i + 1; j < units.length; j++) {
         const b = units[j]
-        if (b.hp <= 0) continue
+        if (!activeUnit(b)) continue
         const dx = a.x - b.x
         const dy = a.y - b.y
         const d = Math.hypot(dx, dy)
@@ -226,9 +228,9 @@ function pursuitWaypoint(u: Unit, target: Unit) {
 }
 export function tick(previous: Game, dt: number, random = Math.random): Game {
   if (previous.result) return previous
-  const g: Game = { ...previous, hp: { ...previous.hp }, structures: previous.structures.map(s => ({ ...s, cooldown: Math.max(0, s.cooldown - dt), age: s.age + dt })), units: previous.units.map(u => ({ ...u, moving: false })), log: [...previous.log], buildingCooldown: { ...previous.buildingCooldown }, damageEvents: previous.damageEvents.map(e => ({ ...e, age: e.age + dt })).filter(e => e.age < .9), flares: [], impacts: previous.impacts.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < .45), blood: previous.blood.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < .58), bloodStains: previous.bloodStains.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < BLOOD_STAIN_LIFETIME), spells: previous.spells.map(s => ({ ...s, age: s.age + dt })).filter(s => s.age < spellLifetime(s.type)), beers: [], puddles: previous.puddles.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < PUDDLE_LIFETIME), torches: [], fires: previous.fires.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < FIRE_LIFETIME) }
+  const g: Game = { ...previous, hp: { ...previous.hp }, structures: previous.structures.map(s => ({ ...s, cooldown: Math.max(0, s.cooldown - dt), age: s.age + dt })), units: previous.units.map(u => ({ ...u, moving: false, spawnDelay: Math.max(0, (u.spawnDelay ?? 0) - dt) })), log: [...previous.log], buildingCooldown: { ...previous.buildingCooldown }, damageEvents: previous.damageEvents.map(e => ({ ...e, age: e.age + dt })).filter(e => e.age < .9), flares: [], impacts: previous.impacts.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < .45), blood: previous.blood.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < .58), bloodStains: previous.bloodStains.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < BLOOD_STAIN_LIFETIME), spells: previous.spells.map(s => ({ ...s, age: s.age + dt })).filter(s => s.age < spellLifetime(s.type)), beers: [], puddles: previous.puddles.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < PUDDLE_LIFETIME), torches: [], fires: previous.fires.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < FIRE_LIFETIME) }
   for (const old of previous.torches) {
-    const target = typeof old.target === 'number' ? g.units.find(u => u.id === old.target && u.hp > 0) : undefined
+    const target = typeof old.target === 'number' ? g.units.find(u => u.id === old.target && activeUnit(u)) : undefined
     const torch = { ...old, age: old.age + dt, x: target?.x ?? old.x, y: target?.y ?? old.y }
     if (torch.age + 1e-9 < TORCH_FLIGHT) g.torches.push(torch)
     else {
@@ -238,7 +240,7 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
          else { g.hp[torch.target as BuildingKey] = Math.max(0, g.hp[torch.target as BuildingKey] - torch.damage); const b = buildings.find(b => b.key === torch.target); if (b) recordDamage(g, b, torch.damage, 'building') }
        }
       for (const u of g.units) {
-        if (u.side !== torch.side && u.hp > 0 && distance(u, torch) < 9) { const amount = u.id === torch.target ? torch.damage : torch.damage * .6; u.hp -= amount; recordDamage(g, u, amount, 'area') }
+        if (u.side !== torch.side && activeUnit(u) && distance(u, torch) < 9) { const amount = u.id === torch.target ? torch.damage : torch.damage * .6; u.hp -= amount; recordDamage(g, u, amount, 'area') }
       }
       g.fires.push({ id: torch.id, x: torch.x, y: torch.y, age: 0 })
       g.impacts.push({ id: torch.id, x: torch.x, y: torch.y, age: 0 })
@@ -246,7 +248,7 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
     }
   }
   for (const old of previous.beers) {
-    const target = typeof old.target === 'number' ? g.units.find(u => u.id === old.target && u.hp > 0) : undefined
+    const target = typeof old.target === 'number' ? g.units.find(u => u.id === old.target && activeUnit(u)) : undefined
     const beer = { ...old, age: old.age + dt, x: target?.x ?? old.x, y: target?.y ?? old.y }
     if (beer.age + 1e-9 < BEER_FLIGHT) g.beers.push(beer)
     else {
@@ -261,7 +263,7 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
     }
   }
   for (const old of previous.flares) {
-    const target = g.units.find(u => u.id === old.target && u.hp > 0)
+      const target = g.units.find(u => u.id === old.target && activeUnit(u))
     const flare = { ...old, age: old.age + dt, x: target?.x ?? old.x, y: target?.y ?? old.y }
     if (flare.age + 1e-9 < FLARE_FLIGHT) g.flares.push(flare)
     else {
@@ -274,13 +276,13 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
   }
   for (const spell of g.spells) {
     if (spell.type === 'signal' && spell.age >= SPELL_FLIGHT && !spell.applied) {
-      for (const u of g.units) if (u.side !== spell.side && u.hp > 0 && distance(u, spell) <= SIGNAL_RADIUS) { u.hp -= cards[9].damage; recordDamage(g, u, cards[9].damage, 'area') }
+      for (const u of g.units) if (u.side !== spell.side && activeUnit(u) && distance(u, spell) <= SIGNAL_RADIUS) { u.hp -= cards[9].damage; recordDamage(g, u, cards[9].damage, 'area') }
        for (const b of buildings) if (b.side !== spell.side && g.hp[b.key] > 0 && distance(b, spell) <= SIGNAL_RADIUS) { g.hp[b.key] = Math.max(0, g.hp[b.key] - SIGNAL_BUILDING_DAMAGE); recordDamage(g, b, SIGNAL_BUILDING_DAMAGE, 'building') }
        for (const b of g.structures) if (b.side !== spell.side && b.hp > 0 && distance(b, spell) <= SIGNAL_RADIUS) { b.hp = Math.max(0, b.hp - SIGNAL_BUILDING_DAMAGE); recordDamage(g, b, SIGNAL_BUILDING_DAMAGE, 'building') }
       g.impacts.push({ id: spell.id, x: spell.x, y: spell.y, age: 0 })
       spell.applied = true
     } else if (spell.type === 'salvo' && spell.age >= SPELL_FLIGHT && !spell.applied) {
-       for (const u of g.units) if (u.side !== spell.side && u.hp > 0 && distance(u, spell) <= 15) { u.hp -= 75; recordDamage(g, u, 75, 'area') }
+        for (const u of g.units) if (u.side !== spell.side && activeUnit(u) && distance(u, spell) <= 15) { u.hp -= 75; recordDamage(g, u, 75, 'area') }
        for (const b of g.structures) if (b.side !== spell.side && b.hp > 0 && distance(b, spell) <= 15) { b.hp = Math.max(0, b.hp - 75); recordDamage(g, b, 75, 'building') }
       g.fires.push({ id: spell.id, x: spell.x - 2, y: spell.y, age: 0 })
       g.fires.push({ id: spell.id + 1, x: spell.x + 2, y: spell.y + 2, age: 0 })
@@ -288,11 +290,11 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
       spell.applied = true
     } else if (spell.type === 'smoke' && spell.age < spellLifetime('smoke')) {
       for (const u of g.units) {
-        if (u.side !== spell.side && u.hp > 0 && distance(u, spell) <= SMOKE_RADIUS) { const amount = SMOKE_DAMAGE_PER_SECOND * dt; u.hp -= amount; if (Math.floor(spell.age * 2) !== Math.floor((spell.age - dt) * 2)) recordDamage(g, u, amount * 2, 'area') }
+         if (u.side !== spell.side && activeUnit(u) && distance(u, spell) <= SMOKE_RADIUS) { const amount = SMOKE_DAMAGE_PER_SECOND * dt; u.hp -= amount; if (Math.floor(spell.age * 2) !== Math.floor((spell.age - dt) * 2)) recordDamage(g, u, amount * 2, 'area') }
       }
     } else if (spell.type === 'beer-shower' && spell.age < 2.8) {
       for (const u of g.units) {
-        if (u.side === spell.side && u.hp > 0 && distance(u, spell) <= 18) { const amount = Math.min(u.card.hp - u.hp, 35 * dt); u.hp += amount; if (amount > 0 && Math.floor(spell.age * 2) !== Math.floor((spell.age - dt) * 2)) recordDamage(g, u, amount * 2, 'heal') }
+         if (u.side === spell.side && activeUnit(u) && distance(u, spell) <= 18) { const amount = Math.min(u.card.hp - u.hp, 35 * dt); u.hp += amount; if (amount > 0 && Math.floor(spell.age * 2) !== Math.floor((spell.age - dt) * 2)) recordDamage(g, u, amount * 2, 'heal') }
       }
     }
   }
@@ -310,7 +312,7 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
         const lane = random() < .5 ? 0 : 1
         const type = spellType(card)
         if (type) {
-          const enemy = g.units.filter(u => u.side === 'blue' && u.hp > 0).sort((a, b) => b.x - a.x)[0]
+          const enemy = g.units.filter(u => u.side === 'blue' && activeUnit(u)).sort((a, b) => b.x - a.x)[0]
           const fallback = buildings.find(b => b.key === `bluePub${lane === 0 ? 'One' : 'Two'}`)!
           const target = enemy ?? fallback
           g.spells.push({ id: g.id++, type, side: 'red', x: target.x, y: target.y, fromX: 95, fromY: 50, age: 0 })
@@ -349,10 +351,11 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
   }
   g.structures = g.structures.filter(s => s.hp > 0)
   for (const u of g.units) {
-    if (u.hp <= 0) continue
+    if (!activeUnit(u)) continue
     u.cooldown -= dt
-    const allies = g.units.filter(v => v.side === u.side && v.hp > 0 && distance(u, v) < 13)
-    const enemies = g.units.filter(v => v.side !== u.side && v.hp > 0)
+    const allies = g.units.filter(v => v.side === u.side && activeUnit(v) && distance(u, v) < 13)
+    const marchTank = u.card.name === 'Fanmarsch'
+    const enemies = marchTank ? [] : g.units.filter(v => v.side !== u.side && activeUnit(v))
     if (u.card === cards[4]) for (const a of allies) a.hp = Math.min(a.card.hp, a.hp + 12 * dt)
     const nearby = enemies.filter(v => distance(u, v) <= UNIT_ALERT_RADIUS).sort((a, b) => distance(u, a) - distance(u, b))
     const decoy = enemies.filter(v => v.card.name === 'Flitzer' && distance(u, v) <= FLITZER_DECOY_RADIUS).sort((a, b) => distance(u, a) - distance(u, b))[0]
@@ -360,9 +363,25 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
     // Defend against a unit in weapon range rather than chase a distant lock.
     const immediate = nearby.find(v => distance(u, v) <= u.card.range + 1)
     // The Flitzer is deliberately distracting: nearby troops abandon their lane target and pursue it.
-    const target = u.card.name === 'Flitzer' ? undefined : decoy ?? immediate ?? locked ?? nearby[0]
+    const target = marchTank || u.card.name === 'Flitzer' ? undefined : decoy ?? immediate ?? locked ?? nearby[0]
     const structureTarget = !target ? g.structures.filter(s => s.side !== u.side && s.hp > 0 && distance(u, s) <= UNIT_PURSUIT_RADIUS).sort((a, b) => distance(u, a) - distance(u, b))[0] : undefined
     const pointTarget = target ?? structureTarget
+    const escortTank = !target && !structureTarget && u.card.name !== 'Flitzer'
+      ? g.units
+        .filter(v => v !== u && v.side === u.side && v.card.name === 'Fanmarsch' && activeUnit(v) && v.lane === u.lane)
+        .filter(v => u.side === 'blue' ? v.x > u.x + 1 : v.x < u.x - 1)
+        .filter(v => {
+          const tankEnemySide = v.side === 'blue' ? 'red' : 'blue'
+          const tankPub = buildings.find(b => b.key === `${tankEnemySide}Pub${v.lane === 0 ? 'One' : 'Two'}`)!
+          const tankGoal = g.hp[tankPub.key] > 0 ? tankPub : buildings.find(b => b.key === `${tankEnemySide}Fortress`)!
+          const atMainBuilding = v.routeIndex >= (tankGoal === tankPub ? 2 : 4) &&
+            distance(v, tankGoal) <= v.card.range + 8
+          const atStructure = g.structures.some(s => s.side !== v.side && s.hp > 0 &&
+            distance(v, s) <= v.card.range + 1)
+          return !atMainBuilding && !atStructure
+        })
+        .sort((a, b) => distance(u, a) - distance(u, b))[0]
+      : undefined
     u.targetId = target?.id
     const inRange = !!pointTarget && distance(u, pointTarget) <= u.card.range + 1
     const enemySide = u.side === 'blue' ? 'red' : 'blue'
@@ -405,7 +424,14 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
      const smokeSlowed = g.spells.some(s => s.type === 'smoke' && s.side !== u.side && distance(u, s) < SMOKE_RADIUS)
      const beerSlowed = g.spells.some(s => s.type === 'beer-shower' && s.side !== u.side && distance(u, s) < 18)
      const slowed = enemies.some(e => e.card === cards[6] && distance(u, e) < 12) || smokeSlowed || beerSlowed
-        const movement = Math.min(d, u.card.speed * MOVEMENT_SPEED_FACTOR * dt * (smokeSlowed ? .24 : slowed ? .5 : 1))
+        let movement = Math.min(d, u.card.speed * MOVEMENT_SPEED_FACTOR * dt * (smokeSlowed ? .24 : slowed ? .5 : 1))
+        if (escortTank) {
+          const forwardGap = u.side === 'blue' ? escortTank.x - u.x : u.x - escortTank.x
+          const escortGap = Math.max(0, forwardGap - 4)
+          // The march sets the pace. Once close, keep a visible gap and never
+          // let a faster unit overtake the banner.
+          movement = Math.min(movement, escortTank.card.speed * MOVEMENT_SPEED_FACTOR * dt, escortGap)
+        }
        if (d) {
          const dx = (waypoint.x - u.x) / d
          const dy = (waypoint.y - u.y) / d
@@ -429,13 +455,13 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
   }
   separateUnits(g.units)
   const solids = solidBuildings(g)
-  for (const u of g.units) if (u.hp > 0) resolveBuildings(u, solids)
+  for (const u of g.units) if (activeUnit(u)) resolveBuildings(u, solids)
   for (const b of buildings) {
     g.buildingCooldown[b.key] = Math.max(0, g.buildingCooldown[b.key] - dt)
     if (g.hp[b.key] <= 0) continue
     const fortress = b.key.includes('Fortress')
     if (fortress && g.hp[`${b.side}PubOne`] > 0 && g.hp[`${b.side}PubTwo`] > 0) continue
-    const target = g.units.filter(u => u.side !== b.side && u.hp > 0 && distance(u, b) <= (fortress ? GATLING_ATTACK_RANGE : PUB_ATTACK_RANGE)).sort((a, c) => distance(a, b) - distance(c, b))[0]
+    const target = g.units.filter(u => u.side !== b.side && activeUnit(u) && distance(u, b) <= (fortress ? GATLING_ATTACK_RANGE : PUB_ATTACK_RANGE)).sort((a, c) => distance(a, b) - distance(c, b))[0]
     if (!target) continue
     if (g.buildingCooldown[b.key] <= 0) {
       g.flares.push({ id: g.id++, source: b.key, side: b.side, target: target.id, x: target.x, y: target.y, age: 0 })

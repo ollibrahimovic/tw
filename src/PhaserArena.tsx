@@ -627,7 +627,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
               p, false, 1, structure.hp <= 0 ? .4 : 1 + p.y / this.scale.height)
             healthBar(p, structure.hp, structure.max, structure.side, 32)
           }
-          for (const unit of gameRef.current.units) if (unit.hp > 0) drawUnit(unit)
+          for (const unit of gameRef.current.units) if (unit.hp > 0 && (unit.spawnDelay ?? 0) <= 0) drawUnit(unit)
           drawEffects()
           drawPlacement()
           for (const [id, sprite] of sprites) {

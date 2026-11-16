@@ -339,6 +339,75 @@ test('new spell cards fly to their target and new unit cards deploy groups', () 
   assert.ok(deploy(newGame([15]), 0, 30, 22).units.length === 3, 'Pyro-Trupp deploys as a group')
 })
 
+test('group spawns are staggered instead of appearing all at once', () => {
+  let g = deploy(newGame([14]), 0, 30, 22)
+  assert.deepEqual(g.units.map(unit => unit.spawnDelay), [0, .16, .32, .48])
+  g = tick(g, .1)
+  assert.equal(g.units.filter(unit => (unit.spawnDelay ?? 0) <= 0).length, 1)
+  g = tick(g, .4)
+  assert.equal(g.units.filter(unit => (unit.spawnDelay ?? 0) <= 0).length, 4)
+})
+
+test('Fanmarsch ignores enemy units and only deals light damage to buildings', () => {
+  let g = deploy(newGame([20]), 0, 30, 31)
+  g.aiClock = 10000
+  for (const key of ['bluePubOne', 'bluePubTwo', 'redPubOne', 'redPubTwo']) g.buildingCooldown[key] = 100
+  const tank = g.units[0]
+  Object.assign(tank, { x: 78, y: 13, routeIndex: 2, hp: cards[20].hp })
+  g.units.push({ ...tank, id: 900, side: 'red', x: 79, y: 13, hp: 1000, cooldown: 100, card: { ...cards[0], speed: 0, damage: 999 } })
+  const enemyHp = g.units[1].hp
+  const pubHp = g.hp.redPubOne
+  g = tick(g, .05)
+  assert.equal(g.units.find(unit => unit.id === 900)?.hp, enemyHp)
+  assert.equal(g.units[0].targetId, undefined)
+  assert.equal(g.hp.redPubOne, pubHp - cards[20].damage)
+})
+
+test('faster friendly units stay behind the Fanmarsch unless distracted', () => {
+  let g = deploy(newGame([0]), 0, 30, 22)
+  g.aiClock = 10000
+  for (const key of ['bluePubOne', 'bluePubTwo', 'redPubOne', 'redPubTwo']) g.buildingCooldown[key] = 100
+  const follower = g.units[0]
+  Object.assign(follower, { x: 64, y: 22, routeIndex: 2, hp: 10000 })
+  g.units.push({
+    ...follower,
+    id: 900,
+    x: 72,
+    y: 22,
+    card: cards[20],
+    hp: cards[20].hp,
+    cooldown: 100,
+    targetId: undefined,
+  })
+  for (let i = 0; i < 120; i++) {
+    g = tick(g, .05)
+    const fast = g.units.find(unit => unit.id === follower.id)
+    const tank = g.units.find(unit => unit.id === 900)
+    if (!fast || !tank) break
+    assert.ok(fast.x < tank.x + 4, 'the faster unit must not pass the banner')
+  }
+})
+
+test('the formation advances once the Fanmarsch reaches a building', () => {
+  let g = deploy(newGame([0]), 0, 30, 22)
+  g.aiClock = 10000
+  for (const key of ['bluePubOne', 'bluePubTwo', 'redPubOne', 'redPubTwo']) g.buildingCooldown[key] = 100
+  const follower = g.units[0]
+  Object.assign(follower, { x: 60, y: 22, routeIndex: 2, hp: 10000 })
+  g.units.push({
+    ...follower,
+    id: 900,
+    x: 78,
+    y: 13,
+    card: cards[20],
+    hp: cards[20].hp,
+    cooldown: 100,
+    targetId: undefined,
+  })
+  g = tick(g, .05)
+  assert.ok(g.units[0].x > 60.15, 'the follower should use its own speed after the tank stops')
+})
+
 test('smoke bomb heavily slows and lightly damages enemy troops', () => {
   let g = deploy(newGame([8]), 0, 70, 22)
   g.aiClock = 10000
