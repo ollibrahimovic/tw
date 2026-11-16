@@ -94,6 +94,18 @@ function makeUnits(startId: number, x: number, y: number, side: Side, lane: numb
   } satisfies Unit))
 }
 const activeUnit = (unit: Unit) => unit.hp > 0 && (unit.spawnDelay ?? 0) <= 0
+export function deploymentPoint(card: Card, x: number, y: number, side: Side = 'blue') {
+  let point = card.kind === 'building' ? snapBuildingToTile({ x, y }) : snapToTile({ x, y })
+  if (card.kind === 'spell') return point
+  const tile = toTile(point)
+  const boundary = side === 'blue' ? 17 : 14
+  if (side === 'blue' ? tile.y < boundary : tile.y > boundary) {
+    point = card.kind === 'building'
+      ? snapBuildingToTile(fromTile({ x: tile.x, y: boundary }))
+      : snapToTile(fromTile({ x: tile.x, y: boundary }))
+  }
+  return point
+}
 export function canDeploy(g: Game, card: Card, x: number, y: number, side: Side = 'blue') {
   if (!card || !Number.isFinite(x) || !Number.isFinite(y)) return false
   const snapped = card.kind === 'building' ? snapBuildingToTile({ x, y }) : snapToTile({ x, y })

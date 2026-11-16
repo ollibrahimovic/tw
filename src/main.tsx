@@ -2,7 +2,7 @@ import { StrictMode, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import QRCode from 'qrcode'
 import { Flame, Heart, Pause, Play, RotateCcw, Shield, Swords, Trophy, Volume2, VolumeX, Zap } from 'lucide-react'
-import { canDeploy, cards, deploy, newGame, tick } from './game'
+import { canDeploy, cards, deploy, deploymentPoint, newGame, tick } from './game'
 import { Arena, Fan, Fanmarsch, Flitzer } from './Arena'
 import { PhaserArena } from './PhaserArena'
 import type { Card, Game, Side } from './game'
@@ -13,7 +13,7 @@ import './derby.css'
 import './feedback.css'
 import './menu-overrides.css'
 
-const APP_VERSION = '0.4'
+const APP_VERSION = '0.6'
 
 function loadDeck(): number[] {
   try {
@@ -423,8 +423,8 @@ function App() {
   }
   function place(x: number, y: number, slot = selected) {
     if (!running || game.result || onlineStatus === 'waiting' || onlineStatus === 'connecting') return
-    const p = { x, y }
     const card = cards[myQueue[slot]]
+    const p = deploymentPoint(card, x, y, onlineRole)
     if (!canDeploy(game, card, p.x, p.y, onlineRole)) { setMessage(card.kind === 'spell' ? 'Zauber müssen auf dem Spielfeld landen.' : 'Diese Lane ist noch nicht freigeschaltet.'); return }
     if (hype < card.cost) { setMessage('Noch zu wenig Hype!'); return }
     if (onlineStatus === 'playing') socket.current?.send(JSON.stringify({ type: 'deploy', slot, x: p.x, y: p.y }))
@@ -535,7 +535,7 @@ function App() {
        <div className="bottom-panel"><div className="hype"><div className="hype-label"><Flame size={17} /> HYPE <b>{hype.toFixed(1)}</b><span>/ 10</span></div><div className="hype-bar"><i style={{ width: `${hypePercent}%` }} /></div><small>+{time <= 60 ? '0,95' : '0,48'} / Sekunde</small></div>
           <div className="hand">{myQueue.slice(0, 4).map((id, index) => { const card = cards[id]; return <button title={`${card.name} · ${card.role} · ${card.cost} Hype`} draggable={false} onPointerDown={e => { e.preventDefault(); dragged.current = index; setSelected(index); setDraggingCard(true) }} className={`card ${rarityClass(card)} ${selected === index ? 'selected' : ''} ${hype < card.cost ? 'disabled' : ''}`} key={id} onClick={() => { setSelected(index); setDraggingCard(false) }} aria-label={`${card.name}, ${card.cost} Hype`} aria-pressed={selected === index}><span className="card-cost">{card.cost}</span>{cardArt(card)}<b>{card.name}</b><small>{card.role}</small></button> })}</div>
          <div className="panel-actions"><div className="next-card-preview" title={`Nächste Karte: ${nextCard.name}`}><div className="next-card-art">{cardArt(nextCard)}</div><div><small>NÄCHSTE KARTE</small><b>{nextCard.icon} {nextCard.name}</b></div></div><button className="surrender" disabled={!!game.result} onClick={() => { setGame(g => ({ ...g, result: 'AUFGEGEBEN' })); setRunning(false) }}><RotateCcw size={15} /> Aufgeben</button></div>
-      </div><footer><span><Trophy size={13} /> Zerstöre das Clubhaus oder führe nach 3 Minuten bei zerstörten Außenposten.</span><span>v0.4 · TRAINING MVP</span></footer>
+      </div><footer><span><Trophy size={13} /> Zerstöre das Clubhaus oder führe nach 3 Minuten bei zerstörten Außenposten.</span><span>v0.6 · TRAINING MVP</span></footer>
       {message && <div className="toast" role="status">{message}</div>}
     </section>}
   </main>

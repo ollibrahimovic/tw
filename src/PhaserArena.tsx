@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type PhaserType from 'phaser'
-import { buildings, canDeploy, cards } from './game'
+import { buildings, canDeploy, cards, deploymentPoint } from './game'
 import type { Card, Game, Side } from './game'
 import { createArenaEffects } from './phaserEffects'
 import { fromTile, snapToTile, snapBuildingToTile, validTile } from './grid.ts'
@@ -165,7 +165,9 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
         const drawPhaseAlert = () => {
           const seconds = gameRef.current.time
           const suddenDeath = gameRef.current.overtime > 0 && gameRef.current.overtime <= 3.5
-          const active = !gameRef.current.result && (suddenDeath || (seconds > 0 && seconds <= 60))
+          const latePhaseAlert = seconds > 57 && seconds <= 60
+          const finalCountdown = seconds > 0 && seconds <= 10
+          const active = !gameRef.current.result && (suddenDeath || latePhaseAlert || finalCountdown)
           if (!active) {
             phaseBackdrop.clear()
             phaseText.setVisible(false)
@@ -173,23 +175,30 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
             return
           }
           const m = metrics()
-          const finalCountdown = !suddenDeath && seconds <= 10
+          const finalAlert = !suddenDeath && !finalCountdown
+          const opacity = finalAlert
+            ? Math.max(0, Math.min(1, (seconds - 57) / 3))
+            : finalCountdown
+              ? Math.max(0, Math.min(1, seconds / 10))
+              : 1
           const pulse = finalCountdown ? 1 + Math.sin(animationClock * .012) * .06 : 1
           const width = suddenDeath ? 330 : finalCountdown ? 158 : 290
           const height = suddenDeath ? 102 : finalCountdown ? 132 : 78
           const x = m.left + m.pitchWidth / 2
           const y = m.top + m.pitchHeight / 2
           phaseBackdrop.clear()
-            .fillStyle(suddenDeath || finalCountdown ? 0x8f3f32 : 0x17231b, suddenDeath || finalCountdown ? .9 : .82)
+            .fillStyle(suddenDeath || finalCountdown ? 0x8f3f32 : 0x17231b, (suddenDeath || finalCountdown ? .9 : .82) * opacity)
             .fillRoundedRect(x - width / 2, y - height / 2, width, height, 14)
-            .lineStyle(2, suddenDeath || finalCountdown ? 0xf0a35d : 0xd8c77e, .9)
+            .lineStyle(2, suddenDeath || finalCountdown ? 0xf0a35d : 0xd8c77e, .9 * opacity)
             .strokeRoundedRect(x - width / 2, y - height / 2, width, height, 14)
           phaseText.setPosition(x, y - (suddenDeath ? 10 : finalCountdown ? 10 : 6))
             .setScale(suddenDeath ? 1 + Math.sin(animationClock * .01) * .04 : pulse)
             .setText(suddenDeath ? '☠ SUDDEN DEATH ☠' : finalCountdown ? String(Math.ceil(seconds)) : 'LETZTE 60 SEKUNDEN')
+            .setAlpha(opacity)
             .setVisible(true)
           phaseSubtitle.setPosition(x, y + (suddenDeath ? 35 : finalCountdown ? 43 : 25))
             .setText(suddenDeath ? 'CLUBHAUS FÄLLT ODER VERLÄNGERUNG ENDET' : finalCountdown ? 'NOCH ZEIT' : 'ENDSPURT')
+            .setAlpha(opacity)
             .setVisible(true)
         }
 
@@ -678,9 +687,10 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
         }
 
         const drawPlacement = () => {
-          if (!activeRef.current || !hover) return
-          const allowed = canDeploy(gameRef.current, selectedRef.current, hover.x, hover.y, perspectiveRef.current)
-          const p = toScreen(hover.x, hover.y)
+           if (!activeRef.current || !hover) return
+           const placement = deploymentPoint(selectedRef.current, hover.x, hover.y, perspectiveRef.current)
+           const allowed = canDeploy(gameRef.current, selectedRef.current, placement.x, placement.y, perspectiveRef.current)
+           const p = toScreen(placement.x, placement.y)
           const m = metrics()
           const tileWidth = m.pitchWidth / 18
           const tileHeight = m.pitchHeight / 32
@@ -696,7 +706,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
             return
           }
           if (selectedRef.current.kind === 'spell') return
-          const ghost = { x: hover.x, y: hover.y } as Game['units'][number]
+           const ghost = { x: placement.x, y: placement.y } as Game['units'][number]
           ghost.card = selectedRef.current
           ghost.side = perspectiveRef.current
           ghost.hp = selectedRef.current.hp
@@ -709,10 +719,11 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
         })
         this.input.on('pointerdown', () => { pointerDown = true })
         this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
-          if (!activeRef.current) return
-          const target = fromPointer(pointer)
-          if (canDeploy(gameRef.current, selectedRef.current, target.x, target.y, perspectiveRef.current)) {
-            onPlaceRef.current(target.x, target.y, draggingRef.current)
+           if (!activeRef.current) return
+           const rawTarget = fromPointer(pointer)
+           const target = deploymentPoint(selectedRef.current, rawTarget.x, rawTarget.y, perspectiveRef.current)
+           if (canDeploy(gameRef.current, selectedRef.current, target.x, target.y, perspectiveRef.current)) {
+             onPlaceRef.current(target.x, target.y, draggingRef.current)
           }
           pointerDown = false
           hover = null
@@ -735,10 +746,13 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
         }
         const handleCardDragEnd = (event: PointerEvent) => {
           if (!draggingRef.current || !pointerDown) return
-          const target = fromClientPointer(event)
-          if (target && activeRef.current && canDeploy(gameRef.current, selectedRef.current, target.x, target.y, perspectiveRef.current)) {
-            onPlaceRef.current(target.x, target.y, true)
-          }
+           const target = fromClientPointer(event)
+           if (target && activeRef.current) {
+             const placement = deploymentPoint(selectedRef.current, target.x, target.y, perspectiveRef.current)
+             if (canDeploy(gameRef.current, selectedRef.current, placement.x, placement.y, perspectiveRef.current)) {
+               onPlaceRef.current(placement.x, placement.y, true)
+             }
+           }
           pointerDown = false
           hover = null
         }
