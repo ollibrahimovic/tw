@@ -13,6 +13,8 @@ import './derby.css'
 import './feedback.css'
 import './menu-overrides.css'
 
+const APP_VERSION = '0.2'
+
 function loadDeck(): number[] {
   try {
     const value: unknown = JSON.parse(localStorage.getItem('terrace-deck') || 'null')
@@ -410,6 +412,7 @@ function App() {
        <button className="primary" onClick={() => { setOnlineMode(null); setPage('deck') }}><Swords size={21} /> GEGEN KI SPIELEN <span>→</span></button>
        <button className="secondary multiplayer-entry" onClick={() => { setOnlineMode('matchmake'); setPage('deck') }}><Swords size={18} /> GEGNER SUCHEN</button>
        <div className={`multiplayer-status ${serverStatus}`} role="status"><i /> MULTIPLAYER-SERVER: {serverStatus === 'checking' ? 'WIRD GEPRÜFT' : serverStatus === 'online' ? 'ONLINE' : 'OFFLINE'}</div>
+       <div className="app-version">FRONTEND v{APP_VERSION}</div>
        <div className="menu-facts"><span><b>01</b> Karte auswählen</span><span><b>02</b> Hool platzieren</span><span><b>03</b> Clubhaus zerstören</span></div>
        <div className="menu-crest"><span>EST. 2026</span><strong>TW</strong><Swords size={70} /><b>RIVERSIDE FIRM</b><small>ONE PITCH. ONE WINNER.</small></div>
        <div className="menu-note">Kostenloses Browser-MVP · Training gegen KI · Eigene, fiktive Vereine</div>
