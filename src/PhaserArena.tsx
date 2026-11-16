@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type PhaserType from 'phaser'
-import { buildings, canDeploy, cards } from './game'
+import { buildings, canDeploy, cards, deploymentPoint } from './game'
 import type { Card, Game, Side } from './game'
 import { createArenaEffects } from './phaserEffects'
 import { fromTile, snapToTile, snapBuildingToTile, validTile } from './grid.ts'
@@ -687,9 +687,10 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
         }
 
         const drawPlacement = () => {
-          if (!activeRef.current || !hover) return
-          const allowed = canDeploy(gameRef.current, selectedRef.current, hover.x, hover.y, perspectiveRef.current)
-          const p = toScreen(hover.x, hover.y)
+           if (!activeRef.current || !hover) return
+           const placement = deploymentPoint(selectedRef.current, hover.x, hover.y, perspectiveRef.current)
+           const allowed = canDeploy(gameRef.current, selectedRef.current, placement.x, placement.y, perspectiveRef.current)
+           const p = toScreen(placement.x, placement.y)
           const m = metrics()
           const tileWidth = m.pitchWidth / 18
           const tileHeight = m.pitchHeight / 32
@@ -705,7 +706,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
             return
           }
           if (selectedRef.current.kind === 'spell') return
-          const ghost = { x: hover.x, y: hover.y } as Game['units'][number]
+           const ghost = { x: placement.x, y: placement.y } as Game['units'][number]
           ghost.card = selectedRef.current
           ghost.side = perspectiveRef.current
           ghost.hp = selectedRef.current.hp
@@ -718,10 +719,11 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
         })
         this.input.on('pointerdown', () => { pointerDown = true })
         this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
-          if (!activeRef.current) return
-          const target = fromPointer(pointer)
-          if (canDeploy(gameRef.current, selectedRef.current, target.x, target.y, perspectiveRef.current)) {
-            onPlaceRef.current(target.x, target.y, draggingRef.current)
+           if (!activeRef.current) return
+           const rawTarget = fromPointer(pointer)
+           const target = deploymentPoint(selectedRef.current, rawTarget.x, rawTarget.y, perspectiveRef.current)
+           if (canDeploy(gameRef.current, selectedRef.current, target.x, target.y, perspectiveRef.current)) {
+             onPlaceRef.current(target.x, target.y, draggingRef.current)
           }
           pointerDown = false
           hover = null
@@ -744,10 +746,13 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
         }
         const handleCardDragEnd = (event: PointerEvent) => {
           if (!draggingRef.current || !pointerDown) return
-          const target = fromClientPointer(event)
-          if (target && activeRef.current && canDeploy(gameRef.current, selectedRef.current, target.x, target.y, perspectiveRef.current)) {
-            onPlaceRef.current(target.x, target.y, true)
-          }
+           const target = fromClientPointer(event)
+           if (target && activeRef.current) {
+             const placement = deploymentPoint(selectedRef.current, target.x, target.y, perspectiveRef.current)
+             if (canDeploy(gameRef.current, selectedRef.current, placement.x, placement.y, perspectiveRef.current)) {
+               onPlaceRef.current(placement.x, placement.y, true)
+             }
+           }
           pointerDown = false
           hover = null
         }
