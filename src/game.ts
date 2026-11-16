@@ -2,7 +2,7 @@ export type Card = { name: string; role: string; cost: number; icon: string; col
 import { fromTile, toTile, snapToTile, snapBuildingToTile, validTile, walkablePoint, tileDistance, TILE_BUILDINGS, rectCenter, insideRect, buildingRectAt } from './grid.ts'
 import type { TileRect } from './grid.ts'
 export type Side = 'blue' | 'red'
-export type Unit = { id: number; lane: number; x: number; y: number; side: Side; card: Card; hp: number; cooldown: number; routeIndex: number; targetId?: number; moving: boolean; facingBack: boolean; lateralOffset?: number; spawnDelay?: number; spawnDuration?: number }
+export type Unit = { id: number; lane: number; x: number; y: number; side: Side; card: Card; hp: number; cooldown: number; routeIndex: number; targetId?: number; siegeBuilding?: BuildingKey; siegeStructureId?: number; moving: boolean; facingBack: boolean; lateralOffset?: number; spawnDelay?: number; spawnDuration?: number }
 export type Structure = { id: number; x: number; y: number; side: Side; card: Card; hp: number; max: number; cooldown: number; age: number }
 export function laneRoute(side: Side, lane: number) {
   const x = lane === 0 ? 4 : 15
@@ -381,7 +381,15 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
     u.cooldown -= dt
     const allies = g.units.filter(v => v.side === u.side && activeUnit(v) && distance(u, v) < 13)
     const marchTank = u.card.name === 'Fanmarsch'
-    const enemies = marchTank ? [] : g.units.filter(v => v.side !== u.side && activeUnit(v))
+    const enemySide = u.side === 'blue' ? 'red' : 'blue'
+    const pub = buildings.find(b => b.key === `${enemySide}Pub${u.lane === 0 ? 'One' : 'Two'}`)!
+    const goal = g.hp[pub.key] > 0 ? pub : buildings.find(b => b.key === `${enemySide}Fortress`)!
+    if (u.siegeBuilding && g.hp[u.siegeBuilding] <= 0) u.siegeBuilding = undefined
+    if (u.siegeStructureId && !g.structures.some(s => s.id === u.siegeStructureId && s.hp > 0)) u.siegeStructureId = undefined
+    const siegeBuilding = u.siegeBuilding ? buildings.find(b => b.key === u.siegeBuilding && g.hp[b.key] > 0) : undefined
+    const siegeStructure = u.siegeStructureId ? g.structures.find(s => s.id === u.siegeStructureId && s.hp > 0) : undefined
+    const siegeLocked = !!siegeBuilding || !!siegeStructure
+    const enemies = marchTank || siegeLocked ? [] : g.units.filter(v => v.side !== u.side && activeUnit(v))
     if (u.card === cards[4]) for (const a of allies) a.hp = Math.min(a.card.hp, a.hp + 12 * dt)
     const nearby = enemies.filter(v => distance(u, v) <= UNIT_ALERT_RADIUS).sort((a, b) => distance(u, a) - distance(u, b))
     const decoy = enemies.filter(v => v.card.name === 'Flitzer' && distance(u, v) <= FLITZER_DECOY_RADIUS).sort((a, b) => distance(u, a) - distance(u, b))[0]
@@ -389,8 +397,8 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
     // Defend against a unit in weapon range rather than chase a distant lock.
     const immediate = nearby.find(v => distance(u, v) <= u.card.range + 1)
     // The Flitzer is deliberately distracting: nearby troops abandon their lane target and pursue it.
-    const target = marchTank || u.card.name === 'Flitzer' ? undefined : decoy ?? immediate ?? locked ?? nearby[0]
-    const structureTarget = !target ? g.structures.filter(s => s.side !== u.side && s.hp > 0 && distance(u, s) <= UNIT_PURSUIT_RADIUS).sort((a, b) => distance(u, a) - distance(u, b))[0] : undefined
+    const target = marchTank || siegeLocked || u.card.name === 'Flitzer' ? undefined : decoy ?? immediate ?? locked ?? nearby[0]
+    const structureTarget = siegeStructure ?? (!target ? g.structures.filter(s => s.side !== u.side && s.hp > 0 && distance(u, s) <= UNIT_PURSUIT_RADIUS).sort((a, b) => distance(u, a) - distance(u, b))[0] : undefined)
     const pointTarget = target ?? structureTarget
     const escortTank = !target && !structureTarget && u.card.name !== 'Flitzer'
       ? g.units
@@ -410,10 +418,7 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
       : undefined
     u.targetId = target?.id
     const inRange = !!pointTarget && distance(u, pointTarget) <= u.card.range + 1
-    const enemySide = u.side === 'blue' ? 'red' : 'blue'
-    const pub = buildings.find(b => b.key === `${enemySide}Pub${u.lane === 0 ? 'One' : 'Two'}`)!
-    const goal = g.hp[pub.key] > 0 ? pub : buildings.find(b => b.key === `${enemySide}Fortress`)!
-    const focus = pointTarget ?? (u.routeIndex >= 2 ? goal : undefined)
+    const focus = pointTarget ?? siegeBuilding ?? (u.routeIndex >= 2 ? goal : undefined)
     if (focus) u.facingBack = u.side === 'blue' ? focus.x > u.x : focus.x < u.x
     const atBuilding = u.routeIndex >= (goal === pub ? 2 : 4) && distance(u, goal) <= u.card.range + 8
     if (inRange || (!pointTarget && atBuilding)) {
@@ -427,12 +432,14 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
           target.hp -= damage
           recordDamage(g, target, damage, u.card.range <= 4 ? 'hit' : 'area')
           if (u.card.range <= 4) g.blood.push({ id: g.id++, x: target.x, y: target.y, age: 0 })
-        } else if (structureTarget) {
-           const buildingDamage = damage * buildingDamageMultiplier(g)
-           structureTarget.hp -= buildingDamage
-           recordDamage(g, structureTarget, buildingDamage, 'building')
-         } else {
-           const buildingDamage = damage * buildingDamageMultiplier(g)
+          } else if (structureTarget) {
+            if (!u.siegeStructureId) u.siegeStructureId = structureTarget.id
+            const buildingDamage = damage * buildingDamageMultiplier(g)
+            structureTarget.hp -= buildingDamage
+            recordDamage(g, structureTarget, buildingDamage, 'building')
+          } else {
+            if (!u.siegeBuilding) u.siegeBuilding = goal.key
+            const buildingDamage = damage * buildingDamageMultiplier(g)
            g.hp[goal.key] = Math.max(0, g.hp[goal.key] - buildingDamage)
            recordDamage(g, goal, buildingDamage, 'building')
          }
