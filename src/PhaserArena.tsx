@@ -253,7 +253,14 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
             enemyBuildingInRange
           )
           const punch = punching ? Math.max(0, Math.sin(animationClock * .024 + unit.id)) : 0
-          const back = !punching && (unit.facingBack || (unit.side === 'red' && unit.moving))
+          const focus = target ??
+            gameRef.current.structures.find(structure => structure.side !== unit.side && structure.hp > 0) ??
+            buildings.find(building => building.side !== unit.side && gameRef.current.hp[building.key] > 0)
+          const focusScreen = focus ? toScreen(focus.x, focus.y) : undefined
+          const forward = focusScreen && Math.abs(focusScreen.y - p.y) > 1
+            ? (focusScreen.y < p.y ? -1 : 1)
+            : (unit.side === 'blue' ? -1 : 1)
+          const back = unit.facingBack || (unit.side === 'red' && unit.moving)
 
           // The Ultra is intentionally drawn as a chunky, readable game
           // silhouette rather than another circular unit marker.
@@ -272,14 +279,16 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
             [-18, -1 + armSwing], [-11, -10],
           ], skin, opacity)
           shape([
-            [12, -19], [21 + punch * 9, -12 - armSwing], [24 + punch * 13, -3 - armSwing],
-            [18 + punch * 10, -1 - armSwing], [11, -10],
+            [12, -19], [18 + punch * 5, -12 - armSwing + forward * punch * 9],
+            [20 + punch * 8, -3 - armSwing + forward * punch * 15],
+            [16 + punch * 6, -1 - armSwing + forward * punch * 13], [11, -10],
           ], skin, opacity)
           stroke([-17, -7 + armSwing], [-20, -2 + armSwing], 0x8b5948, 1.2, opacity)
-          stroke([17 + punch * 8, -7 - armSwing], [21 + punch * 11, -2 - armSwing], 0x8b5948, 1.2, opacity)
+          stroke([17 + punch * 4, -7 - armSwing + forward * punch * 8],
+            [20 + punch * 8, -2 - armSwing + forward * punch * 13], 0x8b5948, 1.2, opacity)
           graphics.fillStyle(skin, opacity)
           const leftFist = point(-19, -2 + armSwing)
-          const rightFist = point(19 + punch * 13, -2 - armSwing)
+          const rightFist = point(19 + punch * 8, -2 - armSwing + forward * punch * 15)
           graphics.fillCircle(leftFist.x, leftFist.y, 4 * scale)
           graphics.fillCircle(rightFist.x, rightFist.y, 4 * scale)
 
@@ -311,11 +320,15 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
           graphics.strokeCircle(p.x, p.y - 31 * scale, 13 * scale)
           shape([
             [-11, -34], [-10, -41], [-5, -45], [3, -45], [10, -41],
-            [11, -34], [7, -37], [2, -39], [-4, -38], [-9, -36],
+            [11, -34], [10, -28], [6, -26], [-5, -26], [-10, -29],
           ], 0x15191a, opacity, DARK)
           stroke([-7, -41], [-4, -45], 0x3d4540, 1, .8 * opacity)
           stroke([0, -43], [3, -45], 0x3d4540, 1, .8 * opacity)
           if (back) {
+            shape([
+              [-11, -35], [-10, -29], [-7, -25], [-4, -27], [-6, -36],
+              [5, -36], [7, -27], [10, -25], [11, -30], [11, -35],
+            ], 0x15191a, opacity, DARK)
             stroke([-8, -29], [8, -29], scarf, 2.5, opacity)
           } else {
             const leftEye = point(-5, -30)
