@@ -79,7 +79,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
         const phaseText = this.add.text(0, 0, '', {
           color: '#f8edc7',
           fontFamily: 'Arial Black, sans-serif',
-          fontSize: '34px',
+          fontSize: '30px',
           fontStyle: 'bold',
           stroke: '#17231b',
           strokeThickness: 8,
@@ -88,7 +88,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
         const phaseSubtitle = this.add.text(0, 0, '', {
           color: '#d8c77e',
           fontFamily: 'Arial, sans-serif',
-          fontSize: '13px',
+          fontSize: '12px',
           fontStyle: 'bold',
           letterSpacing: 2,
           stroke: '#17231b',
@@ -182,15 +182,9 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
               ? Math.max(0, Math.min(1, seconds / 10))
               : 1
           const pulse = finalCountdown ? 1 + Math.sin(animationClock * .012) * .06 : 1
-          const width = suddenDeath ? 330 : finalCountdown ? 158 : 290
-          const height = suddenDeath ? 102 : finalCountdown ? 132 : 78
           const x = m.left + m.pitchWidth / 2
           const y = m.top + m.pitchHeight / 2
           phaseBackdrop.clear()
-            .fillStyle(suddenDeath || finalCountdown ? 0x8f3f32 : 0x17231b, (suddenDeath || finalCountdown ? .9 : .82) * opacity)
-            .fillRoundedRect(x - width / 2, y - height / 2, width, height, 14)
-            .lineStyle(2, suddenDeath || finalCountdown ? 0xf0a35d : 0xd8c77e, .9 * opacity)
-            .strokeRoundedRect(x - width / 2, y - height / 2, width, height, 14)
           phaseText.setPosition(x, y - (suddenDeath ? 10 : finalCountdown ? 10 : 6))
             .setScale(suddenDeath ? 1 + Math.sin(animationClock * .01) * .04 : pulse)
             .setText(suddenDeath ? '☠ SUDDEN DEATH ☠' : finalCountdown ? String(Math.ceil(seconds)) : 'LETZTE 60 SEKUNDEN')

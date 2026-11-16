@@ -2,7 +2,7 @@ import { StrictMode, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import QRCode from 'qrcode'
 import { Flame, Heart, Pause, Play, RotateCcw, Shield, Swords, Trophy, Volume2, VolumeX, Zap } from 'lucide-react'
-import { canDeploy, cards, deploy, deploymentPoint, newGame, tick } from './game'
+import { canDeploy, cards, deploy, deploymentPoint, newGame, SUDDEN_DEATH_DURATION, tick } from './game'
 import { Arena, Fan, Fanmarsch, Flitzer } from './Arena'
 import { PhaserArena } from './PhaserArena'
 import type { Card, Game, Side } from './game'
@@ -13,7 +13,7 @@ import './derby.css'
 import './feedback.css'
 import './menu-overrides.css'
 
-const APP_VERSION = '0.7'
+const APP_VERSION = '0.8'
 
 function loadDeck(): number[] {
   try {
@@ -108,7 +108,11 @@ function App() {
   const selectedCard = cards[myQueue[selected]]
   const nextCard = cards[myQueue[4]]
   const hypePercent = Math.round(hype * 10)
-  const time = Math.ceil(game.time)
+  const time = game.overtime > 0
+    ? Math.max(0, Math.ceil(SUDDEN_DEATH_DURATION - game.overtime))
+    : Math.ceil(game.time)
+  const formattedTime = `${Math.floor(time / 60).toString().padStart(2, '0')}:${(time % 60).toString().padStart(2, '0')}`
+  const suddenDeath = game.overtime > 0
   const blueScore = Number(buildingHp.redPubOne <= 0) + Number(buildingHp.redPubTwo <= 0)
   const redScore = Number(buildingHp.bluePubOne <= 0) + Number(buildingHp.bluePubTwo <= 0)
 
@@ -488,8 +492,8 @@ function App() {
        return <article className={`collection-card ${rarityClass(card)} ${selectedInDeck >= 0 ? 'deck-selected' : ''}`} key={id}>{cardArt(card)}<span className={`rarity ${rarityClass(card)}`}>{card.rarity} · {card.cost} Hype</span><h2>{card.name}</h2><p>{card.role}</p><div className="card-stats">{card.hp} HP · {card.damage} Schaden<br />{card.kind === 'building' ? 'Gebäude' : `${card.rate}s Angriff · Tempo ${card.speed}`}</div><button className="secondary" onClick={() => toggleDeck(id)}>{selectedInDeck >= 0 ? `${selectedInDeck + 1} · Entfernen` : '＋ Hinzufügen'}</button>{selectedInDeck >= 0 && <button className="secondary deck-reorder" onClick={() => reorder(selectedInDeck)}>Nach vorne ↑</button>}</article>
        })}</div><button className="primary" disabled={deck.length !== 8} onClick={start}>{onlineMode === 'join' ? 'DERBY BEITRETEN' : onlineMode === 'create' ? 'EINLADUNG ERSTELLEN' : onlineMode === 'matchmake' ? 'GEGNER SUCHEN' : 'MIT DIESEM DECK SPIELEN'} <Play size={18} /></button></section>}
      {page === 'arena' && <section className={`page arena-page ${game.result ? 'showing-result' : ''}`}>
-        <div className="mobile-match-timer" aria-label="Verbleibende Spielzeit">{Math.floor(time / 60).toString().padStart(2, '0')}:{(time % 60).toString().padStart(2, '0')}</div>
-       <div className="heading-row"><div><div className="eyebrow"><span className="live-dot" /> TRAINING · GEGEN KI</div><h1>Riverside Derby</h1><p>One pitch. Two firms. Only one winner.</p></div><div className="match-meta"><div><span>{time <= 60 ? 'FINALE PHASE' : 'HEIMSPIEL'}</span><strong>{time <= 60 ? '2× HYPE' : 'RIVERSIDE'}</strong></div><div className={`timer ${time <= 30 ? 'urgent' : ''}`}>{Math.floor(time / 60).toString().padStart(2, '0')}:{(time % 60).toString().padStart(2, '0')}</div><button className="icon-button" disabled={!!game.result || countdown !== null} onClick={() => setRunning(v => !v)} aria-label={running ? 'Pausieren' : 'Fortsetzen'}>{running ? <Pause size={18} /> : <Play size={18} />}</button></div></div>
+         <div className="mobile-match-timer" aria-label="Verbleibende Spielzeit">{formattedTime}</div>
+        <div className="heading-row"><div><div className="eyebrow"><span className="live-dot" /> TRAINING · GEGEN KI</div><h1>Riverside Derby</h1><p>One pitch. Two firms. Only one winner.</p></div><div className="match-meta"><div><span>{suddenDeath ? 'SUDDEN DEATH' : time <= 60 ? 'FINALE PHASE' : 'HEIMSPIEL'}</span><strong>{suddenDeath ? 'VERLÄNGERUNG' : time <= 60 ? '2× HYPE' : 'RIVERSIDE'}</strong></div><div className={`timer ${time <= 30 ? 'urgent' : ''}`}>{formattedTime}</div><button className="icon-button" disabled={!!game.result || countdown !== null} onClick={() => setRunning(v => !v)} aria-label={running ? 'Pausieren' : 'Fortsetzen'}>{running ? <Pause size={18} /> : <Play size={18} />}</button></div></div>
        <div className={`game-layout ${game.result ? 'has-result' : ''}`}>
          <aside className="sidebar left-sidebar"><div className="player-card blue-player"><div className="player-id"><div className="crest blue-crest">R</div><div><b>Deine Firm</b><small>FC Riverside</small></div></div><div className="score">{blueScore}</div></div><div className="stat-card"><div className="stat-title">DEIN CLUBHAUS <Heart size={14} /></div><div className="health-value">{Math.ceil(buildingHp.blueFortress)} <small>/ 2.400 HP</small></div><div className="health-bar"><i style={{ width: `${buildingHp.blueFortress / 24}%` }} /></div><div className="stat-foot"><Shield size={13} /> Heimvorteil</div></div><div className="tip-card"><Zap size={17} /><div><b>Dein Spielzug</b><p>Karte wählen und links platzieren; ab der letzten Spielminute steigt der Gebäudeschaden.</p></div></div></aside>
          <section className="arena-wrap"><div className="arena">
@@ -535,7 +539,7 @@ function App() {
        <div className="bottom-panel"><div className="hype"><div className="hype-label"><Flame size={17} /> HYPE <b>{hype.toFixed(1)}</b><span>/ 10</span></div><div className="hype-bar"><i style={{ width: `${hypePercent}%` }} /></div><small>+{time <= 60 ? '0,95' : '0,48'} / Sekunde</small></div>
           <div className="hand">{myQueue.slice(0, 4).map((id, index) => { const card = cards[id]; return <button title={`${card.name} · ${card.role} · ${card.cost} Hype`} draggable={false} onPointerDown={e => { e.preventDefault(); dragged.current = index; setSelected(index); setDraggingCard(true) }} className={`card ${rarityClass(card)} ${selected === index ? 'selected' : ''} ${hype < card.cost ? 'disabled' : ''}`} key={id} onClick={() => { setSelected(index); setDraggingCard(false) }} aria-label={`${card.name}, ${card.cost} Hype`} aria-pressed={selected === index}><span className="card-cost">{card.cost}</span>{cardArt(card)}<b>{card.name}</b><small>{card.role}</small></button> })}</div>
          <div className="panel-actions"><div className="next-card-preview" title={`Nächste Karte: ${nextCard.name}`}><div className="next-card-art">{cardArt(nextCard)}</div><div><small>NÄCHSTE KARTE</small><b>{nextCard.icon} {nextCard.name}</b></div></div><button className="surrender" disabled={!!game.result} onClick={() => { setGame(g => ({ ...g, result: 'AUFGEGEBEN' })); setRunning(false) }}><RotateCcw size={15} /> Aufgeben</button></div>
-      </div><footer><span><Trophy size={13} /> Zerstöre das Clubhaus oder führe nach 3 Minuten bei zerstörten Außenposten.</span><span>v0.7 · TRAINING MVP</span></footer>
+      </div><footer><span><Trophy size={13} /> Zerstöre das Clubhaus oder führe nach 3 Minuten bei zerstörten Außenposten.</span><span>v0.8 · TRAINING MVP</span></footer>
       {message && <div className="toast" role="status">{message}</div>}
     </section>}
   </main>
