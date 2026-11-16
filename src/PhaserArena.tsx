@@ -297,23 +297,20 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
             [-13, -19], [-8, -25], [8, -25], [13, -19],
             [9, 7], [0, 11], [-10, 7],
           ], jersey, opacity)
-          stroke([-9, -19], [-6, -12], skin, 2.2, opacity)
-          stroke([9, -19], [6, -12], skin, 2.2, opacity)
-          graphics.fillStyle(scarf, opacity)
-          graphics.fillRect(p.x - 11 * scale, p.y - 13 * scale, 22 * scale, 6 * scale)
-          graphics.fillStyle(0xd0c18e, .8 * opacity)
-          graphics.fillRect(p.x - 8 * scale, p.y - 12 * scale, 3 * scale, 4 * scale)
-          graphics.fillRect(p.x + 5 * scale, p.y - 12 * scale, 3 * scale, 4 * scale)
-          stroke([-7, -4], [7, -4], 0x93958a, 1, .65 * opacity)
-          stroke([0, -7], [0, 7], 0x93958a, 1, .55 * opacity)
-          if (back) {
-            stroke([-8, -19], [8, -19], scarf, 2.5, opacity)
-            stroke([-7, -14], [7, -14], 0xd0c18e, 1, .8 * opacity)
-            stroke([-5, -3], [5, -3], 0x93958a, 1, .65 * opacity)
+          if (!back) {
+            stroke([-9, -19], [-6, -12], skin, 2.2, opacity)
+            stroke([9, -19], [6, -12], skin, 2.2, opacity)
+            graphics.fillStyle(scarf, opacity)
+            graphics.fillRect(p.x - 11 * scale, p.y - 13 * scale, 22 * scale, 6 * scale)
+            graphics.fillStyle(0xd0c18e, .8 * opacity)
+            graphics.fillRect(p.x - 8 * scale, p.y - 12 * scale, 3 * scale, 4 * scale)
+            graphics.fillRect(p.x + 5 * scale, p.y - 12 * scale, 3 * scale, 4 * scale)
+            stroke([-7, -4], [7, -4], 0x93958a, 1, .65 * opacity)
+            stroke([0, -7], [0, 7], 0x93958a, 1, .55 * opacity)
           }
 
           // Short black hair and a scarred front. The back stays clean and
-          // only shows the haircut, neck and scarf.
+          // only shows the rear of the head and hair.
           graphics.fillStyle(skin, opacity)
           graphics.fillCircle(p.x, p.y - 31 * scale, 13 * scale)
           graphics.lineStyle(1.5 * scale, DARK, opacity)
@@ -322,14 +319,15 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
             [-11, -34], [-10, -41], [-5, -45], [3, -45], [10, -41],
             [11, -34], [10, -28], [6, -26], [-5, -26], [-10, -29],
           ], 0x15191a, opacity, DARK)
-          stroke([-7, -41], [-4, -45], 0x3d4540, 1, .8 * opacity)
-          stroke([0, -43], [3, -45], 0x3d4540, 1, .8 * opacity)
+          if (!back) {
+            stroke([-7, -41], [-4, -45], 0x3d4540, 1, .8 * opacity)
+            stroke([0, -43], [3, -45], 0x3d4540, 1, .8 * opacity)
+          }
           if (back) {
             shape([
-              [-11, -35], [-10, -29], [-7, -25], [-4, -27], [-6, -36],
-              [5, -36], [7, -27], [10, -25], [11, -30], [11, -35],
+              [-11, -35], [-10, -29], [-8, -24], [-4, -26], [-3, -35],
+              [4, -35], [5, -26], [9, -24], [11, -30], [11, -35],
             ], 0x15191a, opacity, DARK)
-            stroke([-8, -29], [8, -29], scarf, 2.5, opacity)
           } else {
             const leftEye = point(-5, -30)
             const rightEye = point(5, -30)
