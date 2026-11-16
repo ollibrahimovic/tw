@@ -5,7 +5,10 @@ import { deploy, newGame, tick, AI_DECK, cards } from '../src/game.ts'
 const port = Number(process.env.PORT || 8787)
 const httpServer = createServer((request, response) => {
   if (request.url === '/health') {
-    response.writeHead(200, { 'content-type': 'application/json' })
+    response.writeHead(200, {
+      'content-type': 'application/json',
+      'access-control-allow-origin': '*',
+    })
     response.end(JSON.stringify({ ok: true, rooms: rooms.size }))
     return
   }
