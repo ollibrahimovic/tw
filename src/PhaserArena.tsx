@@ -238,7 +238,21 @@ export function PhaserArena({ game, selectedCard, active, perspective = 'blue', 
           const legSwing = Math.sin(phase) * 11 * movement
           const armSwing = Math.sin(phase + Math.PI) * 6 * movement
           const back = unit.facingBack || (unit.side === 'red' && unit.moving)
-          const punching = unit.targetId !== undefined && unit.card.range <= 4
+          const distanceTo = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+            Math.hypot(a.x - b.x, a.y - b.y)
+          const target = gameRef.current.units.find(other =>
+            other.id === unit.targetId && other.side !== unit.side && other.hp > 0)
+          const enemyStructureInRange = gameRef.current.structures.some(structure =>
+            structure.side !== unit.side && structure.hp > 0 && distanceTo(unit, structure) <= unit.card.range + 1)
+          const enemyBuildingInRange = buildings.some(building =>
+            building.side !== unit.side &&
+            gameRef.current.hp[building.key] > 0 &&
+            distanceTo(unit, building) <= unit.card.range + 8)
+          const punching = unit.card.range <= 4 && (
+            (!!target && distanceTo(unit, target) <= unit.card.range + 1) ||
+            enemyStructureInRange ||
+            enemyBuildingInRange
+          )
           const punch = punching ? Math.max(0, Math.sin(animationClock * .024 + unit.id)) : 0
 
           // The Ultra is intentionally drawn as a chunky, readable game
