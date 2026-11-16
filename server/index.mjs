@@ -1,6 +1,6 @@
 import { WebSocketServer } from 'ws'
 import { createServer } from 'node:http'
-import { deploy, newGame, tick, AI_DECK } from '../src/game.ts'
+import { deploy, newGame, tick, AI_DECK, cards } from '../src/game.ts'
 
 const port = Number(process.env.PORT || 8787)
 const httpServer = createServer((request, response) => {
@@ -31,7 +31,7 @@ function broadcast(room, message) {
 }
 
 function validDeck(deck) {
-  return Array.isArray(deck) && deck.length === 8 && new Set(deck).size === 8 && deck.every(id => Number.isInteger(id) && id >= 0 && id < 20)
+  return Array.isArray(deck) && deck.length === 8 && new Set(deck).size === 8 && deck.every(id => Number.isInteger(id) && id >= 0 && id < cards.length)
 }
 
 function closeRoom(room, reason = 'Der Raum wurde geschlossen.') {

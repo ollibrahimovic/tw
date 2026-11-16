@@ -10,6 +10,14 @@ export const snapToTile = (p: Point): Point => {
   const t = toTile(p)
   return fromTile({ x: Math.round(t.x), y: Math.round(t.y) })
 }
+export const snapBuildingToTile = (p: Point): Point => {
+  const t = toTile(p)
+  return fromTile({ x: Math.floor(t.x) + .5, y: Math.floor(t.y) + .5 })
+}
+export const buildingRectAt = (p: Point): TileRect => {
+  const t = toTile(p)
+  return { left: t.x - .5, right: t.x + .5, top: t.y - .5, bottom: t.y + .5 }
+}
 export function validTile(x: number, y: number) {
   return Number.isInteger(x) && Number.isInteger(y) &&
     ((x >= 1 && x <= 18 && y >= 1 && y <= 30) ||

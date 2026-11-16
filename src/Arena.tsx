@@ -135,6 +135,29 @@ export function Fan({ card, side = 'blue', fighting = false, moving = false, bac
   </g>
 }
 
+export function Fanmarsch({ side = 'blue', moving = false }: { side?: Side; moving?: boolean }) {
+  const team = side === 'blue' ? '#64c9bd' : '#e9754e'
+  return <g className={`fanmarsch-art ${moving ? 'fanmarsch-walking' : ''}`} stroke="#131817" strokeWidth="2" strokeLinejoin="round">
+    <ellipse cy="5" rx="30" ry="8" fill="#080d0c" opacity=".58" stroke="none" />
+    <g className="fanmarsch-crowd">
+      {[[-18, -8], [-8, 0], [3, -3], [14, 1], [0, 8]].map(([x, y], i) => <g key={i} transform={`translate(${x} ${y}) scale(${i === 4 ? .9 : 1})`}>
+        <path d="M-9 5-7-22 0-27 8-21 10 5Z" fill={i % 2 ? '#303a39' : '#273134'} />
+        <path d="M-8-19 0-24 8-19V-8H-8Z" fill={team} opacity=".86" />
+        <circle cy="-32" r="8" fill={i % 2 ? '#b7836c' : '#c39170'} />
+        <path d="M-9-34Q0-43 9-34" fill="#252c28" />
+      </g>)}
+    </g>
+    <g className="fanmarsch-torch" transform="translate(-23 -20) rotate(-12)">
+      <path d="M0 4 3-29" stroke="#4d3f35" strokeWidth="4" />
+      <path d="M1-2 3-29" stroke="#d3b590" strokeWidth="2.5" />
+      <g transform="translate(3 -31) scale(.7)"><PyroFlame /></g>
+    </g>
+    <path d="M22-65V13" fill="none" stroke="#b9a66f" strokeWidth="2.5" />
+    <path d="M24-63H56V-37H24Z" fill={team} stroke="#1d2924" strokeWidth="2" />
+    <path d="M29-57H50V-43H29Z" fill="none" stroke="#e2d49c" strokeWidth="2" opacity=".8" />
+  </g>
+}
+
 export function Flitzer({ side = 'blue', back = side === 'blue', moving = false }: { side?: Side; back?: boolean; moving?: boolean }) {
   const skin = side === 'blue' ? '#c58f72' : '#a97862'
   return <g className={`flitzer-art ${moving ? 'flitzer-walking' : ''}`} stroke="#241b18" strokeWidth="2.2" strokeLinejoin="round">
@@ -467,7 +490,7 @@ export function Arena({ game, selectedCard, active, dragging = false, perspectiv
       return { key: b.key, layer: game.hp[b.key] <= 0 ? -1 : 0, ...origin, node: <Club side={b.side} fortress={b.key.includes('Fortress')} hp={game.hp[b.key]} max={b.max} activated={game.hp[`${b.side}PubOne`] <= 0 || game.hp[`${b.side}PubTwo`] <= 0} aimAngle={aimAngle} throwing={game.buildingCooldown[b.key] > (b.key.includes('Fortress') ? GATLING_INTERVAL : FLARE_INTERVAL) - .3} /> }
     }),
      ...game.structures.map(s => ({ key: `structure-${s.id}`, layer: 0, ...project(s.x, s.y), node: <BeerStall side={s.side} kind={s.card.name === 'Würstchenbude' ? 'sausage' : 'beer'} hp={s.hp} max={s.max} /> })),
-      ...game.units.map(u => ({ key: String(u.id), layer: 0, ...project(u.x, u.y), node: <><title>{u.card.name} · {Math.ceil(u.hp)} HP</title><g className="arena-troop" transform="scale(.8)">{u.card.name === 'Flitzer' ? <Flitzer side={u.side} moving={u.moving} /> : <Fan card={u.card} side={u.side} moving={u.moving} back={u.facingBack} fighting={u.cooldown > u.card.rate - .2} />}<rect x="-18" y="8" width="36" height="3.5" rx="1" fill="#111c17" stroke="#0b0f0d" strokeWidth=".7" /><rect x="-18" y="8" width={36 * Math.max(0, u.hp) / u.card.hp} height="3.5" rx="1" fill={u.side === 'blue' ? '#6cc8ae' : '#ef805b'} />{u.cooldown > u.card.rate - .2 && <path className="impact-flash" d="M16-23 24-31 22-21 31-19 22-17 23-9 17-17Z" fill="#efd8a0" />}</g></> })),
+      ...game.units.filter(u => (u.spawnDelay ?? 0) <= 0).map(u => ({ key: String(u.id), layer: 0, ...project(u.x, u.y), node: <><title>{u.card.name} · {Math.ceil(u.hp)} HP</title><g className="arena-troop" transform="scale(.8)">{u.card.name === 'Fanmarsch' ? <Fanmarsch side={u.side} moving={u.moving} /> : u.card.name === 'Flitzer' ? <Flitzer side={u.side} moving={u.moving} /> : <Fan card={u.card} side={u.side} moving={u.moving} back={u.facingBack} fighting={u.cooldown > u.card.rate - .2} />}<rect x="-18" y="8" width="36" height="3.5" rx="1" fill="#111c17" stroke="#0b0f0d" strokeWidth=".7" /><rect x="-18" y="8" width={36 * Math.max(0, u.hp) / u.card.hp} height="3.5" rx="1" fill={u.side === 'blue' ? '#6cc8ae' : '#ef805b'} />{u.cooldown > u.card.rate - .2 && <path className="impact-flash" d="M16-23 24-31 22-21 31-19 22-17 23-9 17-17Z" fill="#efd8a0" />}</g></> })),
    ].sort((a, b) => a.layer - b.layer || a.y - b.y)
     return <svg ref={svg} className="iso-arena vertical-arena" viewBox={mobileLayout ? '180 120 408 920' : '180 40 408 1000'} preserveAspectRatio={mobileLayout ? 'none' : 'xMidYMax slice'} role="img" aria-label="Vertikale isometrische Derby-Arena." onPointerDown={e => { if (active) { setDraggingOver(true); setHover(point(e.clientX, e.clientY)) } }} onPointerMove={e => { if (active && (dragging || draggingOver)) setHover(point(e.clientX, e.clientY)) }} onPointerUp={e => { const p = point(e.clientX, e.clientY); if (p && active) onPlace(p.x, p.y, dragging); setHover(null); setDraggingOver(false) }} onPointerCancel={() => { setHover(null); setDraggingOver(false) }} onPointerLeave={() => { if (!dragging) { setHover(null); setDraggingOver(false) } }} onDragEnter={e => { e.preventDefault(); setDraggingOver(true) }} onDragOver={e => { e.preventDefault(); setDraggingOver(true); setHover(point(e.clientX, e.clientY)) }} onDragLeave={() => { setHover(null); setDraggingOver(false) }} onDrop={e => { e.preventDefault(); const p = point(e.clientX, e.clientY); if (p) onPlace(p.x, p.y, true); setHover(null); setDraggingOver(false) }}>
     <VerticalEnvironment />

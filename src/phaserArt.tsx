@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type Phaser from 'phaser'
-import { BeerStall, Club, Fan, Flitzer, GatlingGuard } from './Arena'
+import { BeerStall, Club, Fan, Fanmarsch, Flitzer, GatlingGuard } from './Arena'
 import { cards } from './game'
 import type { ReactNode } from 'react'
 
@@ -39,7 +39,8 @@ export function loadArenaArt(scene: Phaser.Scene) {
       if (card.kind === 'spell' || card.kind === 'building') continue
       for (const back of [false, true]) for (let pose = 0; pose < 4; pose++) {
         add(`fan-${index}-${side}-${back}-${pose}`,
-          card.name === 'Flitzer' ? <Flitzer side={side} back={back} /> :
+          card.name === 'Fanmarsch' ? <Fanmarsch side={side} moving={pose === 1} /> :
+            card.name === 'Flitzer' ? <Flitzer side={side} back={back} /> :
             <Fan card={card} side={side} back={back} fighting={pose === 3} />, true, pose)
       }
     }
