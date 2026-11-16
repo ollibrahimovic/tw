@@ -1,5 +1,5 @@
 import type Phaser from 'phaser'
-import { buildings, BEER_FLIGHT, TORCH_FLIGHT, FLARE_FLIGHT, FIRE_LIFETIME, PUDDLE_LIFETIME } from './game'
+import { buildings, BEER_FLIGHT, TORCH_FLIGHT, FLARE_FLIGHT, FIRE_LIFETIME, PUDDLE_LIFETIME, SPELL_FLIGHT } from './game'
 import type { Game } from './game'
 
 type Point = { x: number; y: number }
@@ -122,6 +122,67 @@ export function createArenaEffects(scene: Phaser.Scene, project: (x: number, y: 
           flame(start, 6, time, flare.id, 1 - age / .12)
         }
       } else flame(p, 5, time, flare.id)
+    }
+    for (const spell of game.spells) {
+      const target = project(spell.x, spell.y)
+      const start = project(spell.fromX, spell.fromY)
+      const raw = Math.min(1, (spell.age + extraAge) / SPELL_FLIGHT)
+      const flight = 1 - Math.pow(1 - raw, 1.65)
+      const flying = (spell.type === 'signal' || spell.type === 'salvo') && raw < 1
+      if (spell.type === 'smoke') {
+        const life = Math.max(0, 1 - spell.age / 7.5)
+        const pulse = 1 + Math.sin(time * 2.5 + spell.id) * .08
+        air.fillStyle(0x111b19, .32 * life).fillEllipse(target.x, target.y + 4, 85 * pulse, 35 * pulse)
+        for (let i = 0; i < 9; i++) {
+          const angle = i * 2.399 + spell.id
+          const cloud = {
+            x: target.x + Math.cos(angle) * (30 + (i % 3) * 12) * pulse,
+            y: target.y - 5 + Math.sin(angle) * (14 + (i % 2) * 7) * pulse - (time * 9 + i * 8) % 18,
+          }
+          air.fillStyle(i % 2 ? 0x5b655e : 0x788078, (.18 + (i % 3) * .035) * life)
+            .fillCircle(cloud.x, cloud.y, (14 + (i % 4) * 4) * pulse)
+        }
+        continue
+      }
+      const rockets = spell.type === 'salvo' ? 3 : 1
+      for (let i = 0; i < rockets; i++) {
+        const offset = spell.type === 'salvo' ? (i - 1) * 9 : 0
+        const from = { x: start.x, y: start.y + offset }
+        const to = { x: target.x, y: target.y + offset }
+        const p = arc(from, to, 62 + Math.abs(offset), flight)
+        const tangent = {
+          x: (to.x - from.x) - Math.cos(Math.PI * flight) * 62,
+          y: (to.y - from.y) - Math.cos(Math.PI * flight) * 62,
+        }
+        const angle = Math.atan2(tangent.y, tangent.x)
+        if (flying) {
+          for (let trail = 1; trail <= 4; trail++) {
+            const tail = arc(from, to, 62 + Math.abs(offset), Math.max(0, flight - trail * .045))
+            air.fillStyle(trail % 2 ? 0x9b9c8d : 0xd1b77d, .55 - trail * .1)
+              .fillCircle(tail.x, tail.y, 3.5 - trail * .5)
+          }
+          air.save().translateCanvas(p.x, p.y).rotateCanvas(angle)
+          air.fillStyle(0xd7d0ad, .95).fillTriangle(-9, -3, 7, -3, 12, 0)
+          air.fillStyle(0x73746a, .9).fillRect(-9, -3, 8, 6)
+          air.fillStyle(0xff7b2b, 1).fillTriangle(-9, 0, -23, -6, -19, 0)
+          air.fillStyle(0xffd269, 1).fillTriangle(-9, 0, -19, 0, -23, 6)
+          air.restore()
+        } else {
+          const age = Math.max(0, spell.age - SPELL_FLIGHT)
+          const fade = Math.max(0, 1 - age / (spell.type === 'salvo' ? 2.5 : 1.9))
+          const impact = { x: target.x + offset, y: target.y + offset }
+          air.fillStyle(spell.type === 'salvo' ? 0xff6b25 : 0xffbf48, .2 * fade)
+            .fillCircle(impact.x, impact.y, (42 + age * 8) * fade)
+          flame(impact, spell.type === 'salvo' ? 8 : 6, time + i, spell.id + i, fade)
+          for (let spark = 0; spark < 7; spark++) {
+            const a = spark * Math.PI / 3.5
+            stroke(impact, {
+              x: impact.x + Math.cos(a) * (12 + age * 20),
+              y: impact.y + Math.sin(a) * (8 + age * 14),
+            }, 0xffce68, 1.5, fade)
+          }
+        }
+      }
     }
     for (const impact of game.impacts) {
       const age = impact.age + extraAge

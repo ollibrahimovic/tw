@@ -192,6 +192,95 @@
   }
 }
 
+/* The hand is a quick selector, not a second stat sheet. Keep the next-card
+   preview visible beside it and let the frame color communicate rarity. */
+.arena-page .hand .card {
+  width: 108px;
+  height: 116px;
+}
+
+.arena-page .hand .card .card-art {
+  height: 52px !important;
+}
+
+.arena-page .hand .card > b {
+  font-size: 10px;
+}
+
+.arena-page .hand .card > small {
+  font-size: 8px;
+}
+
+.arena-page .next-card-preview {
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 4px;
+  max-width: 116px;
+}
+
+.arena-page .next-card-preview .next-card-art {
+  width: 34px;
+  height: 43px;
+}
+
+.arena-page .next-card-preview small,
+.arena-page .next-card-preview b {
+  font-size: 7px;
+}
+
+.mobile-match-timer {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .app-shell.in-arena .mobile-match-timer {
+    display: block;
+    position: absolute;
+    z-index: 50;
+    top: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #d5df97;
+    font: 700 25px/1 'Barlow Condensed', sans-serif;
+    letter-spacing: 2px;
+    text-shadow: 2px 2px #10170f;
+    pointer-events: none;
+  }
+
+  .app-shell.in-arena .hand {
+    grid-template-columns: repeat(4, minmax(0, .82fr));
+    justify-content: center;
+  }
+
+  .app-shell.in-arena .hand .card {
+    width: 100% !important;
+    height: 84% !important;
+    align-self: center;
+    aspect-ratio: .82;
+  }
+
+  .app-shell.in-arena .hand .card .card-art {
+    height: 34px !important;
+  }
+
+  .app-shell.in-arena .next-card-preview {
+    grid-template-columns: 22px minmax(0, 1fr);
+    gap: 3px;
+    max-width: calc(100% - 72px);
+    height: 22px;
+    overflow: hidden;
+  }
+
+  .app-shell.in-arena .next-card-preview .next-card-art {
+    width: 22px;
+    height: 20px;
+  }
+
+  .app-shell.in-arena .next-card-preview small,
+  .app-shell.in-arena .next-card-preview b {
+    font-size: 5.5px;
+  }
+}
+
 /* Mobile-first arena: the viewport is the game board, not a scrolling page. */
 @media (max-width: 600px) {
   .app-shell.in-arena,
