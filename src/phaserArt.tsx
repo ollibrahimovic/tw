@@ -6,11 +6,22 @@ import type { ReactNode } from 'react'
 
 // Rasterized once at load time; gameplay uses GPU textures, not SVG DOM nodes.
 export function loadArenaArt(scene: Phaser.Scene) {
+  const walkDirectionForPose = (pose: number) => pose >= 4 && pose < 6 ? 'left'
+    : pose >= 6 && pose < 8 ? 'right'
+      : pose >= 8 && pose < 10 ? 'forward-left'
+        : pose >= 10 && pose < 12 ? 'forward-right'
+          : 'forward'
   const add = (key: string, art: ReactNode, character: boolean, pose = 0) => {
-    const step = pose === 1 ? 12 : pose === 2 ? -12 : 0
+    const step = pose > 0 && pose !== 3 ? (pose % 2 ? 12 : -12) : 0
+    const walkDirection = walkDirectionForPose(pose)
     const css = `
       .iso-club > rect,.iso-club > text,.beer-stall > rect {display:none}
       .fan-back .balaclava-head,.fan-back .scarred-head,.fan-back .beanie-head {display:none}
+      .sausage-head-base {display:none}
+      .fan-walk-left .fan-body {transform:translateX(-2px) skewY(-8deg) rotate(-5deg);transform-origin:0 -30px}
+      .fan-walk-right .fan-body {transform:translateX(2px) skewY(8deg) rotate(5deg);transform-origin:0 -30px}
+      .fan-walk-forward-left .fan-body {transform:translateX(-1px) skewY(-5deg) rotate(-3deg);transform-origin:0 -30px}
+      .fan-walk-forward-right .fan-body {transform:translateX(1px) skewY(5deg) rotate(3deg);transform-origin:0 -30px}
       .leg-left,.flitzer-leg-left {transform:rotate(${step}deg);transform-origin:-7px -14px}
       .leg-right,.flitzer-leg-right {transform:rotate(${-step}deg);transform-origin:7px -14px}
       .arm-left {transform:rotate(${-step}deg);transform-origin:-14px -28px}
@@ -37,11 +48,11 @@ export function loadArenaArt(scene: Phaser.Scene) {
     }
     for (const [index, card] of cards.entries()) {
       if (card.kind === 'spell' || card.kind === 'building') continue
-      for (const back of [false, true]) for (let pose = 0; pose < 4; pose++) {
+      for (const back of [false, true]) for (let pose = 0; pose < 12; pose++) {
         add(`fan-${index}-${side}-${back}-${pose}`,
-          card.name === 'Fanmarsch' ? <Fanmarsch side={side} moving={pose === 1} /> :
+          card.name === 'Fanmarsch' ? <Fanmarsch side={side} moving={pose === 1} flagPose={pose} /> :
             card.name === 'Flitzer' ? <Flitzer side={side} back={back} /> :
-            <Fan card={card} side={side} back={back} fighting={pose === 3} />, true, pose)
+            <Fan card={card} side={side} back={back} fighting={pose === 3} moving={pose !== 0 && pose !== 3} walkDirection={walkDirectionForPose(pose)} ragePose={card.name === 'Würstchenverkäufer' ? pose : 0} />, true, pose)
       }
     }
     for (const hp of [100, 60, 25, 0]) {

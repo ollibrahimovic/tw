@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react'
-import { buildings, canDeploy, cards, laneRoute, FLARE_FLIGHT, FLARE_INTERVAL, GATLING_INTERVAL, BEER_FLIGHT, PUDDLE_LIFETIME, TORCH_FLIGHT, FIRE_LIFETIME, BLOOD_STAIN_LIFETIME, SPELL_FLIGHT } from './game'
+import { buildings, canDeploy, cards, cardUnitOffsets, laneRoute, FLARE_FLIGHT, FLARE_INTERVAL, GATLING_INTERVAL, BEER_FLIGHT, PUDDLE_LIFETIME, TORCH_FLIGHT, FIRE_LIFETIME, BLOOD_STAIN_LIFETIME, SPELL_FLIGHT, SAUSAGE_LIFETIME } from './game'
 import type { Card, Game, Side } from './game'
 import './pyro.css'
 import { fromTile, snapToTile, validTile } from './grid.ts'
@@ -51,32 +51,38 @@ function PyroFlame({ smoke = true }: { smoke?: boolean }) {
   </g>
 }
 
-export function Fan({ card, side = 'blue', fighting = false, moving = false, back = false, wounded = false, victory = false }: { card: Card; side?: Side; fighting?: boolean; moving?: boolean; back?: boolean; wounded?: boolean; victory?: boolean }) {
+export function Fan({ card, side = 'blue', fighting = false, moving = false, back = false, wounded = false, victory = false, ragePose = 0, walkDirection = 'forward' }: { card: Card; side?: Side; fighting?: boolean; moving?: boolean; back?: boolean; wounded?: boolean; victory?: boolean; ragePose?: number; walkDirection?: string }) {
   const id = cards.indexOf(card)
   const team = side === 'blue' ? '#64c9bd' : '#e9754e'
   const pyro = id === 7 || id === 15
   const sausageSeller = card.name === 'Würstchenverkäufer'
   const masked = id === 0 || id === 5 || pyro
-  const bald = id === 1 || id === 3 || id === 6 || sausageSeller
+  const bald = id === 1 || id === 3 || id === 6
   const skin = id === 3 ? '#c59d82' : id === 6 ? '#a9795d' : '#c39170'
   const quote = victory ? ({ 'Der Ultra': 'DURCH!', 'Der Capo': 'ALLE VOR!', 'Würstchenverkäufer': 'WURST!', 'Flitzer': 'HINTERHER!' } as Record<string, string>)[card.name] : undefined
-  return <g className={`fan-art fan-${id} ${sausageSeller ? 'fan-sausage-seller' : ''} ${back ? 'fan-back' : ''} ${wounded ? 'fan-wounded' : ''} ${fighting ? 'fan-attacking' : ''} ${victory ? 'fan-victory' : ''} ${moving && !fighting ? 'fan-walking' : ''}`} stroke="#131817" strokeWidth="2.2" strokeLinejoin="round">
+  return <g className={`fan-art fan-${id} ${sausageSeller ? 'fan-sausage-seller' : ''} ${back ? 'fan-back' : ''} ${wounded ? 'fan-wounded' : ''} ${fighting ? 'fan-attacking' : ''} ${victory ? 'fan-victory' : ''} ${moving && !fighting ? 'fan-walking' : ''} fan-walk-${walkDirection}`} stroke="#131817" strokeWidth="2.2" strokeLinejoin="round">
     {quote && <g className="fan-quote" stroke="none"><path d="M-24-78Q-24-91-11-91H24Q31-91 31-84V-73Q31-66 24-66H-8L-16-61-15-66H-17Q-24-66-24-73Z" fill="#e9dda9" stroke="#26342c" strokeWidth="1.5" /><text x="3" y="-75" textAnchor="middle" fill="#25352b" fontSize="6.5" fontWeight="900">{quote}</text></g>}
     <ellipse cy="2" rx="18" ry="6" fill="#080d0c" opacity=".5" stroke="none" />
     <g className="fan-body">
-      <g className="fan-legs" fill="#202626"><path className="leg-left" d="M-9-15-3-14-5 1-8 2-8 5-15 5-14 1Z" /><path className="leg-right" d="M2-14 8-15 11 1 14 2 14 5 7 5 5 1Z" /></g>
-      <g className="fan-arms" fill="#343d3c"><path className="arm-left" d="M-14-33-23-25-25-16-20-14-14-22-7-27Z" /><path className="arm-right" d="M13-33 22-25 24-16 19-14 13-22 7-27Z" /></g>
+      <g className="fan-legs" fill={sausageSeller ? '#315d89' : '#202626'}><path className="leg-left" d="M-9-15-3-14-5 1-8 2-8 5-15 5-14 1Z" /><path className="leg-right" d="M2-14 8-15 11 1 14 2 14 5 7 5 5 1Z" /></g>
+      <g className="fan-arms" fill={sausageSeller ? '#c39170' : '#343d3c'}><path className="arm-left" d="M-14-33-23-25-25-16-20-14-14-22-7-27Z" /><path className="arm-right" d="M13-33 22-25 24-16 19-14 13-22 7-27Z" /></g>
       <path d="M-16 3H-5 M6 3H17 M-10-4h5 M7-4h5" stroke="#70786c" strokeWidth="1" />
-      <path d="M-15-35 -6-40 8-40 17-33 17-11 10-8-13-10Z" fill={id === 6 ? '#a59a42' : id === 3 ? '#444c43' : '#273134'} />
+      <path d="M-15-35 -6-40 8-40 17-33 17-11 10-8-13-10Z" fill={sausageSeller ? '#315d89' : id === 6 ? '#a59a42' : id === 3 ? '#444c43' : '#273134'} />
       <path d={`M-13-34 -24-25 -22-17 -16-15 -7-26 ${id === 2 || pyro ? '' : 'M14-33 23-25 22-16 16-16 7-27'}`} fill={id === 3 ? skin : '#343d3c'} />
       <path d={`M-23-20 -17-21 -14-16 -17-12 -23-14Z ${id === 2 || pyro ? '' : 'M17-21 23-21 26-16 22-12 17-15Z'}`} fill={masked ? '#1a2527' : skin} strokeWidth="1.5" />
       <path d="M-22-17h5 M19-17h5" stroke={masked ? '#7c8780' : '#8a5f4b'} strokeWidth="1" />
-      <path d="M-13-35 -6-38 -3-14-13-12Z M6-38 14-33 11-13 5-15Z" fill={card.color} opacity=".5" stroke="none" />
+      <path d="M-13-35 -6-38 -3-14-13-12Z M6-38 14-33 11-13 5-15Z" fill={sausageSeller ? '#315d89' : card.color} opacity=".5" stroke="none" />
        <path d="M0-34 0-12 M-11-17-4-16 M5-17 12-18" stroke="#93958a" strokeWidth=".9" />
-       {sausageSeller && <g className="sausage-body"><ellipse cx="0" cy="-20" rx="14" ry="11" fill="#b57f63" opacity=".9" /><path d="M-13-31H13L10-7H-10Z" fill="#75634d" stroke="#40382d" strokeWidth="1.4" /><path d="M-7-24-3-21M5-17 8-14" stroke="#a64d35" strokeWidth="2" strokeLinecap="round" /></g>}
+       {sausageSeller && <g className="sausage-body">
+          <ellipse cx="0" cy="-18" rx="22" ry="17" fill="#b57f63" opacity=".95" />
+          <path d="M-20-35H20L16 4Q0 11-16 4Z" fill="#f4f0dc" stroke="#b9b39d" strokeWidth="1.4" />
+         <path d="M-12-33 0-27 12-33M-8-28V0M8-28V0" fill="none" stroke="#d2c9ad" strokeWidth="2" />
+          <path d="M-10-3H10V7H-10Z" fill="#d9d1b8" stroke="#9d967f" strokeWidth="1" />
+         <path d="M-5-23-1-20M5-17 9-14" stroke="#c18e72" strokeWidth="2" strokeLinecap="round" />
+       </g>}
       <path d="M-11-30-5-29 M7-31 12-30 M-9-24-6-21 M9-23 12-25" stroke="#c7c6ac" strokeWidth=".8" opacity=".6" />
       {id === 3 && <><path d="M-13-35-7-38-5-12-12-14Z M8-38 14-34 11-14 5-12Z" fill="#191f20" /><path d="M-11-33-8-32 M-10-29-7-28 M9-33 11-32" stroke="#a5a99d" strokeWidth="1.5" /></>}
-      <g className={masked ? 'balaclava-head' : bald ? 'scarred-head' : 'beanie-head'}>
+       <g className={sausageSeller ? 'sausage-head-base' : masked ? 'balaclava-head' : bald ? 'scarred-head' : 'beanie-head'}>
         <path d="M-8-35V-29L7-28V-37" fill={skin} />
         <path d="M-12-49Q-13-60 0-61Q14-60 13-49L12-37 6-30-5-31-12-39Z" fill={skin} />
         <path d="M7-56 12-49 10-38 4-32-2-33 5-40Z" fill="#825942" opacity=".45" stroke="none" />
@@ -102,12 +108,19 @@ export function Fan({ card, side = 'blue', fighting = false, moving = false, bac
           <path d="M-10-29 9-28 8-24-10-25Z" fill={team} strokeWidth="1" />
         </>}
       </g>
+      {sausageSeller && <g className="sausage-seller-head">
+        <path d="M-13-43Q-14-58 0-62Q15-58 14-43L10-31 4-27-6-29-12-35Z" fill={skin} />
+        <path d="M-16-43Q-15-63 0-68Q16-64 17-45L13-31 9-28 8-43Q0-51-9-43L-10-28-15-34Z" fill="#33251f" stroke="#171716" strokeWidth="1.5" />
+        <path d="M-14-35Q-18-20-12-10M13-35Q18-20 12-10" fill="none" stroke="#33251f" strokeWidth="5" strokeLinecap="round" />
+        {!back && <><path d="M-10-45-2-47M2-47 10-45" fill="none" stroke="#33251f" strokeWidth="2.6" strokeLinecap="round" /><circle cx="-5" cy="-42" r="1.5" fill="#211b18" stroke="none" /><circle cx="5" cy="-42" r="1.5" fill="#211b18" stroke="none" /><path d="M-7-30Q0-35 7-30" fill="none" stroke="#513228" strokeWidth="2.4" /></>}
+      </g>}
       {back && <g className="fan-back-view">
-        <path className="back-cover" d="M-14-35-7-41 8-40 16-33 14-10 4-6-12-12Z" fill={id === 6 ? '#a59a42' : id === 3 ? '#444c43' : '#273134'} />
-        <path d="M-10-31-4-35 7-34 12-29" fill="none" stroke={team} strokeWidth="3" opacity=".8" />
-        <path d="M-7-29 7-27 M-9-23 9-21 M-8-17 10-15" stroke="#93958a" strokeWidth="1" opacity=".55" />
-        <path d="M-10-51Q0-62 12-51L10-35 0-30-10-36Z" fill={masked ? '#182226' : id === 4 ? '#594747' : '#353e34'} />
-        <path d="M-8-48Q0-55 9-48 M-7-42Q0-47 8-42" fill="none" stroke="#818374" strokeWidth="1.2" />
+        <path className="back-cover" d="M-14-35-7-41 8-40 16-33 14-10 4-6-12-12Z" fill={sausageSeller ? '#315d89' : id === 6 ? '#a59a42' : id === 3 ? '#444c43' : '#273134'} />
+        <path d="M-10-31-4-35 7-34 12-29" fill="none" stroke={sausageSeller ? '#f4f0dc' : team} strokeWidth="3" opacity=".8" />
+        <path d="M-7-29 7-27 M-9-23 9-21 M-8-17 10-15" stroke={sausageSeller ? '#d2c9ad' : '#93958a'} strokeWidth="1" opacity=".55" />
+        <path d={sausageSeller ? 'M-15-50Q0-64 15-50L13-28 7-23-7-23-13-28Z' : 'M-10-51Q0-62 12-51L10-35 0-30-10-36Z'} fill={sausageSeller ? '#33251f' : masked ? '#182226' : id === 4 ? '#594747' : '#353e34'} />
+        <path d={sausageSeller ? 'M-12-48Q0-56 12-48 M-13-40Q0-48 13-40 M-13-32Q0-40 13-32' : 'M-8-48Q0-55 9-48 M-7-42Q0-47 8-42'} fill="none" stroke={sausageSeller ? '#76513d' : '#818374'} strokeWidth="1.2" />
+        {sausageSeller && <path d="M-11-30H11L9-5Q0 1-9-5Z" fill="#f4f0dc" stroke="#b9b39d" strokeWidth="1" />}
         {id === 7 && <path d="M-3-55 3-61 8-55" fill="none" stroke="#999b86" strokeWidth="1.2" />}
       </g>}
       <path d="M-7-28 -6-14 -1-17 -2-28" fill={team} strokeWidth="1" />
@@ -116,15 +129,25 @@ export function Fan({ card, side = 'blue', fighting = false, moving = false, bac
       {id === 4 && <><ellipse cx="7" cy="-18" rx="14" ry="6" fill="#d8c695" /><path d="M-7-18V-7Q7 0 21-7V-18" fill="#875644" /><ellipse cx="7" cy="-18" rx="14" ry="6" fill="#e1d5ba" /><path d="M-15-27 5-18 M22-29 10-18" stroke="#dbc7a4" /></>}
       {id === 5 && <path d="M-17-34 -25-31 -25-12 -17-10" fill="#8c7960" />}
       {id === 6 && <path d="M3-29 13-30 M3-23 13-24" stroke="#e8dcaa" strokeWidth="3" />}
-      {sausageSeller && <g className="sausage-gear"><path d="M15-29 28-38" stroke="#8c6741" strokeWidth="4" /><path d="M25-41 34-38 29-32 21-35Z" fill="#c9c1a2" /><path d="M-17-25-29-30" stroke="#8c6741" strokeWidth="4" /><path d="M-35-33-27-35" stroke="#d8bd72" strokeWidth="3" strokeLinecap="round" /></g>}
-        {pyro && <g className="pyro-arm">
+       {sausageSeller && <g className="sausage-gear">
+         <path d="M15-27 31-47" stroke="#714a2e" strokeWidth="3.5" />
+         <path d="M27-50 36-48 33-39 25-42Z" fill="#c9c1a2" stroke="#4b4031" strokeWidth="1.2" />
+         <path d="M-17-25-32-45" stroke="#714a2e" strokeWidth="3.5" />
+         <path d="M-36-49Q-31-45-27-49M-36-46Q-31-42-27-46" fill="none" stroke="#c9c1a2" strokeWidth="2" />
+        </g>}
+       {sausageSeller && <g className="sausage-rage-arm" transform={`rotate(${ragePose === 1 ? -8 : ragePose === 2 ? 8 : ragePose === 3 ? -5 : 0} 13 -29)`}>
+         <path d="M13-29Q24-34 26-46L25-59" fill="none" stroke="#c39170" strokeWidth="7" strokeLinecap="round" />
+         <path d="M20-62Q22-69 28-68L32-63 30-57 24-56 20-59Z" fill="#c39170" stroke="#5b392d" strokeWidth="1.5" />
+         <path d="M23-63 28-61M25-66 30-64" fill="none" stroke="#8a5f4b" strokeWidth="1.2" />
+       </g>}
+         {pyro && <g className="pyro-arm">
         <path d="M12-34 20-29 22-23 17-20 8-27" fill="#343d3c" />
         <path d="M17-28 22-29 25-25 22-21 17-22Z" fill="#172124" strokeWidth="1.5" />
         <path d="M18-25h4" stroke="#848c7b" strokeWidth="1" />
         <g className="held-torch"><path d="M17-25 21-43" stroke="#4d3f35" strokeWidth="5" /><path d="M18-29 21-43" stroke="#d3b590" strokeWidth="3" /><path d="M19-39 21-44" stroke="#fff0c1" strokeWidth="3" /><g transform="translate(21 -44) scale(.9)"><PyroFlame /></g></g>
       </g>}
       {id === 3 && <path d="M-14-30 -20-26 -15-13 -10-17Z" fill="#74766b" />}
-      {back && <path className="back-jacket" d="M-12-28-5-14 5-13 13-28 15-8 5-4-10-7Z" fill={team} opacity=".7" />}
+      {back && <path className="back-jacket" d="M-12-28-5-14 5-13 13-28 15-8 5-4-10-7Z" fill={sausageSeller ? '#315d89' : team} opacity=".7" />}
       {wounded && <g className="wound-details">
         <path d="M-11-45-5-42 M5-42 11-45" stroke="#355b9b" strokeWidth="4" strokeLinecap="round" opacity=".9" />
         <path d="M-9-39-4-38 M4-38 9-39" stroke="#1e3767" strokeWidth="1.5" />
@@ -135,8 +158,9 @@ export function Fan({ card, side = 'blue', fighting = false, moving = false, bac
   </g>
 }
 
-export function Fanmarsch({ side = 'blue', moving = false }: { side?: Side; moving?: boolean }) {
+export function Fanmarsch({ side = 'blue', moving = false, flagPose = 0 }: { side?: Side; moving?: boolean; flagPose?: number }) {
   const team = side === 'blue' ? '#64c9bd' : '#e9754e'
+  const flagSwing = flagPose === 1 ? -4 : flagPose === 2 ? 4 : flagPose === 3 ? -2 : 0
   return <g className={`fanmarsch-art ${moving ? 'fanmarsch-walking' : ''}`} stroke="#131817" strokeWidth="2" strokeLinejoin="round">
     <ellipse cy="5" rx="30" ry="8" fill="#080d0c" opacity=".58" stroke="none" />
     <g className="fanmarsch-crowd">
@@ -153,8 +177,10 @@ export function Fanmarsch({ side = 'blue', moving = false }: { side?: Side; movi
       <g transform="translate(3 -31) scale(.7)"><PyroFlame /></g>
     </g>
     <path d="M22-65V13" fill="none" stroke="#b9a66f" strokeWidth="2.5" />
-    <path d="M24-63H56V-37H24Z" fill={team} stroke="#1d2924" strokeWidth="2" />
-    <path d="M29-57H50V-43H29Z" fill="none" stroke="#e2d49c" strokeWidth="2" opacity=".8" />
+    <g className="fanmarsch-flag" transform={`rotate(${flagSwing} 24 -50)`}>
+      <path d="M24-63H56V-37H24Z" fill={team} stroke="#1d2924" strokeWidth="2" />
+      <path d="M29-57H50V-43H29Z" fill="none" stroke="#e2d49c" strokeWidth="2" opacity=".8" />
+    </g>
   </g>
 }
 
@@ -267,7 +293,7 @@ export const Club = memo(function Club({ side, fortress, hp, max, throwing, acti
      </g>
     <rect x="-30" y="18" width="60" height="6" rx="1" fill="#0b1612" stroke="#a6a18a" strokeWidth=".5" />
     <rect x="-29" y="19" width={58 * hp / max} height="4" fill={c} />
-     <text y="36" textAnchor="middle" fill="#ded6bc" fontSize="10" fontWeight="700">{Math.ceil(hp)}</text>
+      {hp < max && <text y="36" textAnchor="middle" fill="#ded6bc" fontSize="10" fontWeight="700">{Math.ceil(hp)} HP</text>}
    </g>
  })
 
@@ -293,8 +319,9 @@ export const BeerStall = memo(function BeerStall({ side, hp, max, kind = 'beer' 
     <path d="M-2-35H19V-24H-2Z" fill={sausage ? '#d08b50' : '#d8c77e'} stroke="#1c2a24" strokeWidth="1.5" opacity={critical ? .65 : 1} />
     <text x="8" y="-27" textAnchor="middle" fill="#273226" fontSize="5" fontWeight="900">{sausage ? 'WURST' : 'BIER'}</text>
     {!sausage ? <g transform="translate(15 -47) rotate(-8)"><path d="M-6-5H6L5 7Q0 10-5 7Z" fill="#e7dfb4" stroke="#243027" strokeWidth="1.4" /><path d="M6-2Q12-2 9 4Q7 7 5 5" fill="none" stroke="#e7dfb4" strokeWidth="1.7" /><path d="M-4-5Q0-10 4-5" fill="#f8f0c8" stroke="#243027" strokeWidth="1" /></g> : <g transform="translate(8 -17) rotate(-8)"><path d="M-19 1Q-15-6-7-3L12-2Q20 0 17 6Q14 11 7 8L-12 7Q-20 6-19 1Z" fill="#b95832" stroke="#3a241b" strokeWidth="1.8" /><path d="M-11-1-8 5M-3-2 0 5M5-1 8 6" stroke="#e5b15d" strokeWidth="1.5" strokeLinecap="round" /><path d="M-22 11H20" stroke="#b69a67" strokeWidth="1.5" strokeLinecap="round" /></g>}
-    <rect x="-31" y="35" width="62" height="4" rx="1" fill="#0b1612" stroke="#a6a18a" strokeWidth=".5" />
-     <rect x="-30" y="36" width={60 * hp / max} height="2" fill={c} />
+      <rect x="-31" y="35" width="62" height="4" rx="1" fill="#0b1612" stroke="#a6a18a" strokeWidth=".5" />
+      <rect x="-30" y="36" width={60 * hp / max} height="2" fill={c} />
+      {hp < max && <text y="51" textAnchor="middle" fill="#ded6bc" fontSize="8" fontWeight="700">{Math.ceil(hp)} HP</text>}
    </g>
  })
 
@@ -350,7 +377,9 @@ const VerticalEnvironment = memo(function VerticalEnvironment() {
   const p = (x: number, y: number) => baseProject(x, y)
   const points = (coords: Array<[number, number]>) => coords.map(([x, y]) => { const q = p(x, y); return `${q.x},${q.y}` }).join(' ')
   const lanePath = (lane: number, side: Side) => laneRoute(side, lane).map((q, i) => { const v = p(q.x, q.y); return `${i ? 'L' : 'M'}${v.x} ${v.y}` }).join(' ')
-  const fenceSegments: Array<[number, number]> = [[-28, 100 * 2 / 18], [100 * 5 / 18, 100 * 13 / 18], [100 * 16 / 18, 128]]
+       // The two openings match the simulation's 3x2 bridges:
+       // tile columns 2.5–5.5 and 13.5–16.5.
+       const fenceSegments: Array<[number, number]> = [[-28, 100 * 2 / 18], [100 * 5 / 18, 100 * 13 / 18], [100 * 16 / 18, 128]]
   return <>
     <defs>
       <pattern id="vertical-asphalt" width="9" height="9" patternUnits="userSpaceOnUse"><rect width="9" height="9" fill="#3f4939" /><path d="M1 2h.4M6 7h.7M4 5h.25" stroke="#a09b78" strokeWidth=".25" opacity=".45" /></pattern>
@@ -490,7 +519,7 @@ export function Arena({ game, selectedCard, active, dragging = false, perspectiv
       return { key: b.key, layer: game.hp[b.key] <= 0 ? -1 : 0, ...origin, node: <Club side={b.side} fortress={b.key.includes('Fortress')} hp={game.hp[b.key]} max={b.max} activated={game.hp[`${b.side}PubOne`] <= 0 || game.hp[`${b.side}PubTwo`] <= 0} aimAngle={aimAngle} throwing={game.buildingCooldown[b.key] > (b.key.includes('Fortress') ? GATLING_INTERVAL : FLARE_INTERVAL) - .3} /> }
     }),
      ...game.structures.map(s => ({ key: `structure-${s.id}`, layer: 0, ...project(s.x, s.y), node: <BeerStall side={s.side} kind={s.card.name === 'Würstchenbude' ? 'sausage' : 'beer'} hp={s.hp} max={s.max} /> })),
-      ...game.units.filter(u => (u.spawnDelay ?? 0) <= 0).map(u => ({ key: String(u.id), layer: 0, ...project(u.x, u.y), node: <><title>{u.card.name} · {Math.ceil(u.hp)} HP</title><g className="arena-troop" transform="scale(.8)">{u.card.name === 'Fanmarsch' ? <Fanmarsch side={u.side} moving={u.moving} /> : u.card.name === 'Flitzer' ? <Flitzer side={u.side} moving={u.moving} /> : <Fan card={u.card} side={u.side} moving={u.moving} back={u.facingBack} fighting={u.cooldown > u.card.rate - .2} />}<rect x="-18" y="8" width="36" height="3.5" rx="1" fill="#111c17" stroke="#0b0f0d" strokeWidth=".7" /><rect x="-18" y="8" width={36 * Math.max(0, u.hp) / u.card.hp} height="3.5" rx="1" fill={u.side === 'blue' ? '#6cc8ae' : '#ef805b'} />{u.cooldown > u.card.rate - .2 && <path className="impact-flash" d="M16-23 24-31 22-21 31-19 22-17 23-9 17-17Z" fill="#efd8a0" />}</g></> })),
+          ...game.units.filter(u => (u.spawnDelay ?? 0) <= 0).map(u => ({ key: String(u.id), layer: 0, ...project(u.x, u.y), node: <><title>{u.card.name} · {Math.ceil(u.hp)} HP</title><g className="arena-troop" transform={`scale(${u.card.scale ?? (u.card.name === 'Würstchenverkäufer' ? 1.05 : .8)})`}>{u.card.name === 'Fanmarsch' ? <Fanmarsch side={u.side} moving={u.moving} /> : u.card.name === 'Flitzer' ? <Flitzer side={u.side} moving={u.moving} /> : <Fan card={u.card} side={u.side} moving={u.moving} back={u.facingBack} fighting={u.cooldown > u.card.rate - .2} />}<rect x="-18" y="8" width="36" height="3.5" rx="1" fill="#111c17" stroke="#0b0f0d" strokeWidth=".7" /><rect x="-18" y="8" width={36 * Math.max(0, u.hp) / u.card.hp} height="3.5" rx="1" fill={u.side === 'blue' ? '#6cc8ae' : '#ef805b'} />{u.cooldown > u.card.rate - .2 && <path className="impact-flash" d="M16-23 24-31 22-21 31-19 22-17 23-9 17-17Z" fill="#efd8a0" />}</g></> })),
    ].sort((a, b) => a.layer - b.layer || a.y - b.y)
     return <svg ref={svg} className="iso-arena vertical-arena" viewBox={mobileLayout ? '180 120 408 920' : '180 40 408 1000'} preserveAspectRatio={mobileLayout ? 'none' : 'xMidYMax slice'} role="img" aria-label="Vertikale isometrische Derby-Arena." onPointerDown={e => { if (active) { setDraggingOver(true); setHover(point(e.clientX, e.clientY)) } }} onPointerMove={e => { if (active && (dragging || draggingOver)) setHover(point(e.clientX, e.clientY)) }} onPointerUp={e => { const p = point(e.clientX, e.clientY); if (p && active) onPlace(p.x, p.y, dragging); setHover(null); setDraggingOver(false) }} onPointerCancel={() => { setHover(null); setDraggingOver(false) }} onPointerLeave={() => { if (!dragging) { setHover(null); setDraggingOver(false) } }} onDragEnter={e => { e.preventDefault(); setDraggingOver(true) }} onDragOver={e => { e.preventDefault(); setDraggingOver(true); setHover(point(e.clientX, e.clientY)) }} onDragLeave={() => { setHover(null); setDraggingOver(false) }} onDrop={e => { e.preventDefault(); const p = point(e.clientX, e.clientY); if (p) onPlace(p.x, p.y, true); setHover(null); setDraggingOver(false) }}>
     <VerticalEnvironment />
@@ -528,6 +557,16 @@ export function Arena({ game, selectedCard, active, dragging = false, perspectiv
           const t = puddle.age / .4
           return <ellipse key={i} cx={Math.cos(a) * (8 + t * 30)} cy={Math.sin(a) * (5 + t * 12) - 24 * Math.sin(t * Math.PI)} rx="1.7" ry="3" fill={i % 2 ? '#e9b94d' : '#fff1c8'} />
         })}</g>}
+      </g>
+    })}</g>
+    <g pointerEvents="none" className="sausage-drops">{game.sausages.map(sausage => {
+      const p = project(sausage.x, sausage.y)
+      const fade = Math.max(0, 1 - sausage.age / SAUSAGE_LIFETIME)
+      const angle = Math.sin(sausage.id * 2.7) * 32
+      return <g key={sausage.id} transform={`translate(${p.x} ${p.y + 3}) rotate(${angle})`} opacity={fade}>
+        <ellipse rx="10" ry="3.2" fill="#7d2f1f" />
+        <ellipse rx="7.5" ry="2" fill="#d56b35" />
+        <circle cx="-4" cy="-1" r="1" fill="#f0bd62" />
       </g>
     })}</g>
     <g pointerEvents="none" className="blood-stains">{game.bloodStains.map(stain => {
@@ -687,7 +726,7 @@ export function Arena({ game, selectedCard, active, dragging = false, perspectiv
     </g>
     {showPlacement && hover && <g opacity={hoverAllowed ? .8 : .35} pointerEvents="none" transform={`translate(${project(hover.x, hover.y).x} ${project(hover.x, hover.y).y - (mobileLayout ? 70 : 42)})`}>
       <path d="M0 48V70" stroke={hoverAllowed ? '#dfffe8' : '#ff9b8e'} strokeWidth="2" strokeDasharray="3 3" opacity=".8" />
-      {selectedCard.kind === 'spell' ? <SpellPlacementPreview card={selectedCard} /> : selectedCard.kind === 'building' ? <BuildingPlacementPreview card={selectedCard} /> : selectedCard.name === 'Flitzer' ? <g transform="scale(.8)"><Flitzer side="blue" /></g> : <g transform="scale(.8)"><Fan card={selectedCard} /></g>}
+      {selectedCard.kind === 'spell' ? <SpellPlacementPreview card={selectedCard} /> : selectedCard.kind === 'building' ? <BuildingPlacementPreview card={selectedCard} /> : selectedCard.name === 'Flitzer' ? <g transform="scale(.8)"><Flitzer side="blue" /></g> : cardUnitOffsets(selectedCard).length > 1 ? <g>{cardUnitOffsets(selectedCard).map((offset, i) => <g key={i} transform={`translate(${offset.x * 3} ${offset.y * 3}) scale(${selectedCard.scale ?? .8})`}><Fan card={selectedCard} /></g>)}</g> : <g transform={`scale(${selectedCard.scale ?? .8})`}><Fan card={selectedCard} /></g>}
     </g>}
   </svg>
 }

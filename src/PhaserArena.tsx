@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type PhaserType from 'phaser'
-import { buildings, canDeploy, cards, deploymentPoint } from './game'
+import { buildings, canDeploy, cards, cardUnitOffsets, deploymentPoint } from './game'
 import type { Card, Game, Side } from './game'
 import { createArenaEffects } from './phaserEffects'
 import { fromTile, snapToTile, snapBuildingToTile, validTile } from './grid.ts'
@@ -11,6 +11,7 @@ type PhaserArenaProps = {
   active: boolean
   dragging?: boolean
   perspective?: Side
+  showUnitStates?: boolean
   onPlace: (x: number, y: number, drop: boolean) => void
 }
 
@@ -39,15 +40,16 @@ function cardColor(card: Card) {
  *
  * The game rules still live in game.ts. This layer only turns the current
  * state into pixels and owns pointer input, so it can eventually replace the
- * SVG arena without changing multiplayer or simulation code.
+ * Phaser arena without changing multiplayer or simulation code.
  */
-export function PhaserArena({ game, selectedCard, active, dragging = false, perspective = 'blue', onPlace }: PhaserArenaProps) {
+export function PhaserArena({ game, selectedCard, active, dragging = false, perspective = 'blue', showUnitStates = false, onPlace }: PhaserArenaProps) {
   const host = useRef<HTMLDivElement>(null)
   const gameRef = useRef(game)
   const selectedRef = useRef(selectedCard)
   const activeRef = useRef(active)
   const draggingRef = useRef(dragging)
   const perspectiveRef = useRef(perspective)
+  const showUnitStatesRef = useRef(showUnitStates)
   const onPlaceRef = useRef(onPlace)
 
   gameRef.current = game
@@ -55,6 +57,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
   activeRef.current = active
   draggingRef.current = dragging
   perspectiveRef.current = perspective
+  showUnitStatesRef.current = showUnitStates
   onPlaceRef.current = onPlace
 
   useEffect(() => {
@@ -70,10 +73,16 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
       scene.create = function () {
         const graphics = this.add.graphics()
         const sprites = new Map<string, PhaserType.GameObjects.Image>()
+        const visualPositions = new Map<number, Point>()
         const usedSprites = new Set<string>()
+        const buildingHpLabels = new Map<string, PhaserType.GameObjects.Text>()
+        const usedBuildingHpLabels = new Set<string>()
         const bars = this.add.graphics().setDepth(10)
         const displaySide = (side: Side): Side => side === perspectiveRef.current ? 'blue' : 'red'
         const spawnIndicators = this.add.graphics().setDepth(11)
+        const stateIndicators = this.add.graphics().setDepth(12)
+        const feedbackIndicators = this.add.graphics().setDepth(8)
+        const auraIndicators = this.add.graphics().setDepth(9)
         const atmosphere = this.add.graphics().setDepth(.25)
         const phaseBackdrop = this.add.graphics().setDepth(30)
         const phaseText = this.add.text(0, 0, '', {
@@ -104,8 +113,14 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
             sprites.set(id, sprite)
           }
           sprite.setTexture(key).setPosition(p.x, p.y)
-            .setOrigin(.5, character ? .8 : 190 / 240)
-            .setScale(character ? .32 : .28).setAlpha(alpha).setDepth(depth)
+             .setOrigin(.5, character ? .8 : 190 / 240)
+             .setScale(character
+                ? key.includes(`fan-${cards.findIndex(card => card.name === 'Nachwuchs')}-`) ? .18
+                : key.includes(`fan-${cards.findIndex(card => card.name === 'Fanmarsch')}-`) ? .42
+                 : key.includes(`fan-${cards.findIndex(card => card.name === 'Würstchenverkäufer')}-`) ? .42
+                 : .32
+               : .28)
+             .setAlpha(alpha).setDepth(depth)
           return true
         }
         const healthBar = (p: Point, hp: number, max: number, side: Side, width = 24, yOffset = 17) => {
@@ -114,11 +129,31 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           bars.fillStyle(displaySide(side) === 'blue' ? BLUE : RED, 1)
             .fillRect(p.x - width / 2, p.y + yOffset, width * Math.max(0, Math.min(1, hp / max)), 3)
         }
+        const buildingHpLabel = (id: string, p: Point, hp: number, max: number) => {
+          const label = buildingHpLabels.get(id) ?? this.add.text(0, 0, '').setOrigin(.5).setDepth(12)
+          buildingHpLabels.set(id, label)
+          if (hp <= 0 || hp >= max) {
+            label.setVisible(false)
+            return
+          }
+          usedBuildingHpLabels.add(id)
+          label.setPosition(p.x, p.y + 30).setText(`${Math.ceil(hp)} HP`).setVisible(true)
+            .setStyle({ color: '#ded6bc', fontFamily: 'Arial Black, sans-serif', fontSize: '10px', stroke: '#17231b', strokeThickness: 4 })
+        }
         let hover: Point | null = null
         let pointerDown = false
         let animationClock = 0
+        let renderDelta = 1 / 60
         let lastState = gameRef.current
         let stateAge = 0
+        const visualPoint = (unit: Game['units'][number]) => {
+          const current = visualPositions.get(unit.id) ?? { x: unit.x, y: unit.y }
+          const smoothing = Math.min(1, renderDelta * 14)
+          current.x += (unit.x - current.x) * smoothing
+          current.y += (unit.y - current.y) * smoothing
+          visualPositions.set(unit.id, current)
+          return toScreen(current.x, current.y)
+        }
         const drawAtmosphere = () => {
           const m = metrics()
           atmosphere.clear()
@@ -377,10 +412,23 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
             }
           }
           for (const opening of openings) {
+            const bridgeLeft = opening - openingWidth / 2
+            const bridgeRight = opening + openingWidth / 2
             graphics.fillStyle(0x8e7047, 1)
-            graphics.fillRect(opening - openingWidth / 2, fenceY - 10, openingWidth, 20)
-            for (let x = opening - openingWidth / 2 + 6; x < opening + openingWidth / 2; x += 10) {
+            graphics.fillRect(bridgeLeft, fenceY - 10, openingWidth, 20)
+            for (let x = bridgeLeft + 6; x < bridgeRight; x += 10) {
               line({ x, y: fenceY - 9 }, { x: x + 8, y: fenceY + 9 }, 0xd3b77d, 2, .75)
+            }
+            // Heavy end pillars make the exact bridge edges readable against
+            // the fence and visually frame the narrow three-tile crossing.
+            for (const x of [bridgeLeft, bridgeRight]) {
+              graphics.fillStyle(0x1c241d, 1)
+              graphics.fillRect(x - 4, fenceY - 16, 8, 32)
+              graphics.fillStyle(0x65705d, 1)
+              graphics.fillRect(x - 2, fenceY - 14, 2, 28)
+              graphics.fillStyle(0xb0ad88, .9)
+              graphics.fillRect(x - 5, fenceY - 18, 10, 3)
+              graphics.fillRect(x - 5, fenceY + 15, 10, 3)
             }
           }
 
@@ -409,9 +457,10 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
               const aim = (Math.round(angle / (Math.PI / 4)) + 8) % 8
               showArt(`${building.key}-guard`, `gatling-${displaySide(building.side)}-${aim}-${firing}`,
                 at, false, 1, 1.001 + at.y / this.scale.height)
-            }
-            healthBar(at, hp, building.max, building.side, 36)
-            return
+             }
+             healthBar(at, hp, building.max, building.side, 36)
+             buildingHpLabel(building.key, at, hp, building.max)
+             return
           }
           if (hp <= 0) return
           const p = toScreen(building.x, building.y)
@@ -453,16 +502,17 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           }
           graphics.fillStyle(DARK, .8)
           graphics.fillRect(p.x - 18, p.y + height / 2 + 5, 36, 3)
-          graphics.fillStyle(color, 1)
-          graphics.fillRect(p.x - 18, p.y + height / 2 + 5, 36 * hp / building.max, 3)
-          graphics.lineStyle(1.5, 0xa8a794, .9)
+           graphics.fillStyle(color, 1)
+           graphics.fillRect(p.x - 18, p.y + height / 2 + 5, 36 * hp / building.max, 3)
+           buildingHpLabel(building.key, p, hp, building.max)
+           graphics.lineStyle(1.5, 0xa8a794, .9)
           line({ x: p.x, y: roofY - 8 }, { x: p.x, y: roofY - 29 }, 0xa8a794, 1.5, .9)
           graphics.fillStyle(color, 1)
           graphics.fillTriangle(p.x, roofY - 29, p.x + 14, roofY - 24, p.x, roofY - 19)
         }
 
         const drawUltra = (unit: Game['units'][number], ghost = false) => {
-          const p = toScreen(unit.x, unit.y)
+          const p = visualPoint(unit)
           const scale = .72
           const point = (x: number, y: number): Point => ({ x: p.x + x * scale, y: p.y + y * scale })
           const shape = (points: Array<[number, number]>, fill: number, alpha = 1, stroke = DARK) =>
@@ -589,21 +639,38 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           }
         }
 
-        const drawUnit = (unit: Game['units'][number], ghost = false) => {
-          const p = toScreen(unit.x, unit.y)
-          const index = cards.findIndex(card => card.name === unit.card.name)
-          // facingBack is side-relative in the simulation; convert to camera space.
-          const back = ghost ? true : unit.side === perspectiveRef.current ? unit.facingBack : !unit.facingBack
-          const pose = ghost ? 0 : unit.moving ? 1 + Math.floor(animationClock / 160 + unit.id) % 2 :
-            unit.cooldown > unit.card.rate - .2 ? 3 : 0
-          if (showArt(ghost ? 'preview' : `unit-${unit.id}`,
+          const drawUnit = (unit: Game['units'][number], ghost = false, ghostId = 'preview') => {
+           const p = ghost ? toScreen(unit.x, unit.y) : visualPoint(unit)
+           const index = cards.findIndex(card => card.name === unit.card.name)
+           // facingBack is side-relative in the simulation; convert to camera space.
+           const back = ghost ? true : unit.side === perspectiveRef.current ? unit.facingBack : !unit.facingBack
+           const directionPose = (direction: string) => ({
+             forward: 1,
+             backward: 1,
+             left: 4,
+             right: 6,
+             'forward-left': 8,
+             'forward-right': 10,
+             'backward-left': 8,
+             'backward-right': 10,
+           }[direction] ?? 1)
+           // Telegraph the next hit shortly before the cooldown expires.
+           // The impact timing stays in the simulation; this only gives the
+           // player a readable wind-up before the damage event.
+           const attackPose = !ghost &&
+             (unit.state === 'attack' || unit.state === 'siege') &&
+             (unit.cooldown <= .22 || unit.cooldown > unit.card.rate - .2)
+           const pose = ghost ? 0 : attackPose ? 3 : unit.moving
+             ? directionPose(unit.moveDirection) + Math.floor(animationClock / 160 + unit.id) % 2
+             : 0
+           if (showArt(ghost ? ghostId : `unit-${unit.id}`,
             `fan-${index}-${displaySide(unit.side)}-${back}-${pose}`, p, true, ghost ? .48 : 1,
             ghost ? 9 : 1 + p.y / this.scale.height)) {
-            if (!ghost) healthBar(p, unit.hp, unit.card.hp, unit.side, 24, -48)
-            return
+              if (!ghost) healthBar(p, unit.hp, unit.card.hp, unit.side, unit.card.name === 'Nachwuchs' ? 14 : unit.card.name === 'Fanmarsch' ? 30 : 24, unit.card.name === 'Nachwuchs' ? -24 : unit.card.name === 'Fanmarsch' ? -60 : -48)
+             return
           }
           const color = displaySide(unit.side) === 'blue' ? BLUE : RED
-          const radius = unit.card.name === 'Flitzer' ? 11 : 8
+            const radius = unit.card.name === 'Nachwuchs' ? 4 : unit.card.name === 'Würstchenverkäufer' ? 12 : unit.card.name === 'Fanmarsch' ? 11 : unit.card.name === 'Flitzer' ? 11 : 8
           if (unit.card.name === 'Der Ultra') drawUltra(unit, ghost)
           else {
             graphics.fillStyle(0x080d0c, .5)
@@ -616,18 +683,56 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
             graphics.strokeCircle(p.x, p.y, radius)
           }
           graphics.fillStyle(DARK, .8)
-          const barWidth = unit.card.name === 'Der Ultra' ? 24 : 20
-           const barY = unit.card.name === 'Der Ultra' ? -48 : -22
+            const barWidth = unit.card.name === 'Nachwuchs' ? 14 : unit.card.name === 'Der Ultra' ? 24 : unit.card.name === 'Würstchenverkäufer' ? 28 : unit.card.name === 'Fanmarsch' ? 26 : 20
+             const barY = unit.card.name === 'Nachwuchs' ? -24 : unit.card.name === 'Der Ultra' ? -48 : unit.card.name === 'Würstchenverkäufer' ? -38 : unit.card.name === 'Fanmarsch' ? -30 : -22
           graphics.fillRect(p.x - barWidth / 2, p.y + barY, barWidth, 3)
-          graphics.fillStyle(color, ghost ? .5 : 1)
-           graphics.fillRect(p.x - barWidth / 2, p.y + barY, barWidth * Math.max(0, unit.hp / unit.card.hp), 3)
-         }
+           graphics.fillStyle(color, ghost ? .5 : 1)
+            graphics.fillRect(p.x - barWidth / 2, p.y + barY, barWidth * Math.max(0, unit.hp / unit.card.hp), 3)
+          }
+          const drawStateMarker = (unit: Game['units'][number]) => {
+            const colors: Record<string, number> = {
+              advance: 0x8fa493,
+              bridge: 0xf0c65b,
+              pursue: 0xe7a64b,
+              surround: 0xb975e8,
+              attack: 0xef6257,
+              siege: 0x65c7d6,
+            }
+             const p = visualPoint(unit)
+            const radius = unit.card.name === 'Nachwuchs' ? 4 : unit.card.name === 'Fanmarsch' ? 11 : 8
+            const markerX = p.x + radius + 4
+            const markerY = p.y - radius - 4
+            stateIndicators.fillStyle(0x101712, .95)
+            stateIndicators.fillCircle(markerX, markerY, 4)
+            stateIndicators.fillStyle(colors[unit.state] ?? colors.advance, 1)
+            stateIndicators.fillCircle(markerX, markerY, 3)
+          }
+        const effectRadius = (unit: Game['units'][number]) => {
+          if (unit.card.name === 'Der Capo' || unit.card.name === 'Der Trommler') return 13
+          if (unit.card.name === 'Der Ordner') return 12
+          if (unit.card.name === 'Flitzer') return 48
+          return 0
+        }
+        const drawEffectRadius = (unit: Game['units'][number], ghost = false) => {
+          const radius = effectRadius(unit)
+          if (!radius) return
+           const p = visualPoint(unit)
+          const m = metrics()
+          const screenRadius = radius * Math.min(m.pitchWidth, m.pitchHeight) / 100
+          const isDrummer = unit.card.name === 'Der Trommler'
+          const color = isDrummer ? 0xf2c85b : displaySide(unit.side) === 'blue' ? BLUE : RED
+          const shimmer = isDrummer ? .85 + Math.sin(animationClock * .004) * .15 : 1
+          auraIndicators.fillStyle(color, ghost ? .035 : .025 * shimmer)
+          auraIndicators.fillCircle(p.x, p.y, screenRadius)
+          auraIndicators.lineStyle(1.2, color, ghost ? .32 : (isDrummer ? .28 * shimmer : .22))
+          auraIndicators.strokeCircle(p.x, p.y, screenRadius)
+        }
         const drawSpawnIndicator = (unit: Game['units'][number]) => {
           const remaining = unit.spawnDelay ?? 0
           if (remaining <= 0) return
           const duration = unit.spawnDuration ?? .48
           const progress = Math.max(0, Math.min(1, remaining / Math.max(.16, duration)))
-          const p = toScreen(unit.x, unit.y)
+           const p = visualPoint(unit)
           const radius = unit.card.name === 'Der Ultra' ? 25 : unit.card.name === 'Flitzer' ? 18 : 15
           const pulse = 1 + Math.sin(animationClock * .012 + unit.id) * .06
           const teamColor = displaySide(unit.side) === 'blue' ? BLUE : RED
@@ -653,8 +758,30 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
         }
 
         const drawEffects = () => {
-          const current = gameRef.current
-          for (const stain of current.bloodStains) {
+           const current = gameRef.current
+           for (const event of current.damageEvents) {
+             const p = toScreen(event.x, event.y)
+             const fade = Math.max(0, 1 - event.age / .9)
+             const radius = 5 + event.age * 18
+             const color = event.kind === 'building' ? 0xffc75e : event.kind === 'area' ? 0xd979ef : 0xff6b55
+             feedbackIndicators.lineStyle(2.2, color, .85 * fade)
+             feedbackIndicators.strokeCircle(p.x, p.y - event.age * 10, radius)
+             feedbackIndicators.lineStyle(1.4, 0xffe5ad, .7 * fade)
+             feedbackIndicators.lineBetween(p.x - radius * .8, p.y - event.age * 10, p.x + radius * .8, p.y - event.age * 10)
+             feedbackIndicators.lineBetween(p.x, p.y - event.age * 10 - radius * .8, p.x, p.y - event.age * 10 + radius * .8)
+           }
+           for (const unit of current.units) {
+             if (unit.side !== perspectiveRef.current || (unit.spawnDelay ?? 0) > 0 || !unit.targetId) continue
+             const target = current.units.find(other => other.id === unit.targetId && other.hp > 0)
+             if (!target) continue
+             const p = toScreen(target.x, target.y)
+             const pulse = 1 + Math.sin(animationClock * .01 + unit.id) * .08
+             feedbackIndicators.lineStyle(1.4, 0xffd873, .72)
+             feedbackIndicators.strokeCircle(p.x, p.y, 10 * pulse)
+             feedbackIndicators.lineBetween(p.x - 13, p.y, p.x - 7, p.y)
+             feedbackIndicators.lineBetween(p.x + 7, p.y, p.x + 13, p.y)
+           }
+           for (const stain of current.bloodStains) {
             const p = toScreen(stain.x, stain.y)
             const fade = Math.max(0, 1 - stain.age / 3.2)
             graphics.fillStyle(0x651f25, .62 * fade)
@@ -694,17 +821,41 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           graphics.fillRect(p.x - footprintWidth / 2, p.y - footprintHeight / 2, footprintWidth, footprintHeight)
           graphics.lineStyle(2, allowed ? 0xdfffe8 : 0xff9b8e, .8)
           graphics.strokeRect(p.x - footprintWidth / 2, p.y - footprintHeight / 2, footprintWidth, footprintHeight)
-          if (selectedRef.current.kind === 'building') {
-            showArt('preview', `stall-blue-${selectedRef.current.name === 'Würstchenbude' ? 'sausage' : 'beer'}-100`,
-              p, false, .48, 9)
-            return
-          }
-          if (selectedRef.current.kind === 'spell') return
-           const ghost = { x: placement.x, y: placement.y } as Game['units'][number]
-          ghost.card = selectedRef.current
-          ghost.side = perspectiveRef.current
-          ghost.hp = selectedRef.current.hp
-          drawUnit(ghost, true)
+           if (selectedRef.current.kind === 'building') {
+             showArt('preview', `stall-blue-${selectedRef.current.name === 'Würstchenbude' ? 'sausage' : 'beer'}-100`,
+               p, false, .48, 9)
+             return
+           }
+           if (selectedRef.current.kind === 'spell') {
+             const radius = selectedRef.current.name === 'Leuchtrakete' ? 4
+               : selectedRef.current.name === 'Bengalo-Salve' ? 15
+                 : 18
+             const color = selectedRef.current.name === 'Rauchbombe' ? 0x9ca99a
+               : selectedRef.current.name === 'Bierdusche' ? 0xe5bd55
+                 : selectedRef.current.name === 'Leuchtrakete' ? 0xffc35e
+                   : 0xed7042
+             const screenRadius = radius * Math.min(m.pitchWidth, m.pitchHeight) / 100
+             graphics.fillStyle(color, .1)
+             graphics.fillCircle(p.x, p.y, screenRadius)
+             graphics.lineStyle(1.5, color, .65)
+             graphics.strokeCircle(p.x, p.y, screenRadius)
+             return
+           }
+            const offsets = cardUnitOffsets(selectedRef.current)
+            const ghost = { x: placement.x, y: placement.y } as Game['units'][number]
+           ghost.card = selectedRef.current
+           ghost.side = perspectiveRef.current
+             ghost.hp = selectedRef.current.hp
+             drawEffectRadius(ghost, true)
+             offsets.forEach((offset, index) => {
+               const member = {
+                 ...ghost,
+                 id: -1000 - index,
+                 x: placement.x + offset.x,
+                 y: placement.y + offset.y,
+               }
+               drawUnit(member, true, `preview-${index}`)
+             })
         }
 
         this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
@@ -760,27 +911,35 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
         })
 
         scene.renderArena = () => {
-          usedSprites.clear()
-          bars.clear()
-          graphics.clear()
+           usedSprites.clear()
+           usedBuildingHpLabels.clear()
+           bars.clear()
+           stateIndicators.clear()
+           feedbackIndicators.clear()
+           graphics.clear()
           drawAtmosphere()
           drawPitch()
           for (const building of buildings) drawBuilding(building)
           for (const structure of gameRef.current.structures) {
             const p = toScreen(structure.x, structure.y)
-            showArt(`structure-${structure.id}`,
+             showArt(`structure-${structure.id}`,
               `stall-${displaySide(structure.side)}-${structure.card.name === 'Würstchenbude' ? 'sausage' : 'beer'}-${artHealth(structure.hp, structure.max)}`,
               p, false, 1, structure.hp <= 0 ? .4 : 1 + p.y / this.scale.height)
-            healthBar(p, structure.hp, structure.max, structure.side, 32)
-          }
-          spawnIndicators.clear()
-          for (const unit of gameRef.current.units) {
-            if (unit.hp <= 0) continue
-            drawUnit(unit)
-            drawSpawnIndicator(unit)
-          }
-          drawEffects()
-          drawPlacement()
+             healthBar(p, structure.hp, structure.max, structure.side, 32)
+             buildingHpLabel(`structure-${structure.id}`, p, structure.hp, structure.max)
+           }
+            spawnIndicators.clear()
+            auraIndicators.clear()
+            for (const unit of gameRef.current.units) {
+               if (unit.hp <= 0) continue
+               if ((unit.spawnDelay ?? 0) <= 0) drawEffectRadius(unit)
+               drawUnit(unit)
+               if (showUnitStatesRef.current && (unit.spawnDelay ?? 0) <= 0) drawStateMarker(unit)
+               drawSpawnIndicator(unit)
+           }
+           drawEffects()
+           for (const [id, label] of buildingHpLabels) if (!usedBuildingHpLabels.has(id)) label.setVisible(false)
+           drawPlacement()
           drawPhaseAlert()
           for (const [id, sprite] of sprites) {
             if (!usedSprites.has(id)) {
@@ -790,6 +949,8 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           }
         }
         this.events.on(Phaser.Scenes.Events.UPDATE, (_time: number, delta: number) => {
+          if (document.hidden) return
+          renderDelta = Math.min(.05, Math.max(.001, delta / 1000))
           if (lastState !== gameRef.current) {
             lastState = gameRef.current
             stateAge = 0

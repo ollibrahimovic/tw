@@ -1,9 +1,9 @@
 import { StrictMode, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import QRCode from 'qrcode'
-import { Flame, Heart, Pause, Play, RotateCcw, Shield, Swords, Trophy, Volume2, VolumeX, Zap } from 'lucide-react'
+import { Eye, EyeOff, Flame, Heart, Pause, Play, RotateCcw, Shield, Swords, Trophy, Volume2, VolumeX, Zap } from 'lucide-react'
 import { canDeploy, cards, deploy, deploymentPoint, newGame, SUDDEN_DEATH_DURATION, tick } from './game'
-import { Arena, Fan, Fanmarsch, Flitzer } from './Arena'
+import { Fan, Fanmarsch, Flitzer } from './Arena'
 import { PhaserArena } from './PhaserArena'
 import type { Card, Game, Side } from './game'
 import './styles.css'
@@ -13,7 +13,7 @@ import './derby.css'
 import './feedback.css'
 import './menu-overrides.css'
 
-const APP_VERSION = '0.9'
+const APP_VERSION = '0.11'
 
 function loadDeck(): number[] {
   try {
@@ -63,7 +63,6 @@ function checkMultiplayerSocket(signal: AbortSignal) {
 function App() {
   const [deck, setDeck] = useState(loadDeck)
   const preview = new URLSearchParams(window.location.search).get('preview')
-  const usePhaserArena = new URLSearchParams(window.location.search).get('renderer') !== 'svg'
   const initialMatch = new URLSearchParams(window.location.search).get('match')
   const [game, setGame] = useState(() => {
     const initial = newGame(deck)
@@ -77,6 +76,7 @@ function App() {
   const [countdown, setCountdown] = useState<number | 'go' | null>(null)
   const [onlineMode, setOnlineMode] = useState<'create' | 'join' | 'matchmake' | null>(initialMatch ? 'join' : null)
   const [onlineStatus, setOnlineStatus] = useState<'offline' | 'connecting' | 'waiting' | 'playing'>('offline')
+  const [latency, setLatency] = useState<number | null>(null)
   const [onlineRole, setOnlineRole] = useState<Side>('blue')
   const [inviteLink, setInviteLink] = useState('')
   const [inviteQr, setInviteQr] = useState('')
@@ -84,6 +84,7 @@ function App() {
   const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking')
   const [selected, setSelected] = useState(0)
   const [sound, setSound] = useState(true)
+  const [showUnitStates, setShowUnitStates] = useState(false)
   const [message, setMessage] = useState('')
   const [tutorial, setTutorial] = useState(() => {
     try { return localStorage.getItem('terrace-tutorial-seen') !== '1' } catch { return true }
@@ -332,6 +333,7 @@ function App() {
     setRunning(false)
     setCountdown(null)
     setOnlineStatus('connecting')
+    setLatency(null)
     setOnlineMessage('')
     setPage('arena')
     const local = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -350,8 +352,10 @@ function App() {
     socket.current = connection
     let completed = false
     let timeout: number
+    let pingTimer: number | undefined
     const fail = (reason: string) => {
       window.clearTimeout(timeout)
+      if (pingTimer) window.clearInterval(pingTimer)
       if (socket.current !== connection || completed) return
       completed = true
       setOnlineMessage(reason)
@@ -367,6 +371,9 @@ function App() {
     waitFor(60000, 'Verbindung fehlgeschlagen: Der Multiplayer-Server antwortet nicht. Bitte abbrechen und erneut versuchen.')
     connection.onopen = () => {
       if (socket.current !== connection) return
+      pingTimer = window.setInterval(() => {
+        if (connection.readyState === WebSocket.OPEN) connection.send(JSON.stringify({ type: 'ping', sentAt: Date.now() }))
+      }, 3000)
       waitFor(15000, 'Der Server ist erreichbar, bestätigt die Suche aber nicht. Bitte den Multiplayer-Service auf den aktuellen main-Stand deployen.')
       const code = new URLSearchParams(window.location.search).get('match')
       connection.send(JSON.stringify(onlineMode === 'join' && code
@@ -375,7 +382,7 @@ function App() {
     }
     connection.onmessage = event => {
       if (socket.current !== connection || completed) return
-      const message = JSON.parse(event.data) as { type: string; state?: Game; role?: Side; code?: string; invite?: string; waiting?: boolean; message?: string; reason?: string }
+       const message = JSON.parse(event.data) as { type: string; state?: Game; role?: Side; code?: string; invite?: string; waiting?: boolean; message?: string; reason?: string; sentAt?: number }
       if (message.type === 'room') {
         waitFor(message.waiting ? 120000 : 15000, message.waiting
           ? 'Innerhalb von zwei Minuten wurde kein Gegner gefunden. Bitte abbrechen und erneut suchen.'
@@ -386,6 +393,10 @@ function App() {
         setInviteLink(fullInvite)
         void QRCode.toDataURL(fullInvite, { width: 180, margin: 1, color: { dark: '#17231b', light: '#e9dda9' } }).then(setInviteQr)
         setOnlineStatus(message.waiting ? 'waiting' : 'connecting')
+        return
+      }
+      if (message.type === 'pong' && typeof message.sentAt === 'number') {
+        setLatency(Math.max(0, Date.now() - message.sentAt))
         return
       }
       if (message.type === 'match-start' && message.state) {
@@ -466,7 +477,7 @@ function App() {
     return <g><path d="M-22-18H22L17 25H-17Z" fill="#d4a43c" stroke="#604121" strokeWidth="3" /><path d="M-17-18Q0-29 17-18" fill="#f4d36d" stroke="#604121" strokeWidth="3" /><path d="M-10-5H10M-12 7H12" stroke="#fff0ad" strokeWidth="3" opacity=".8" /><path d="M-31-26Q-43-35-32-45M31-26Q43-35 32-45" fill="none" stroke="#e6e3be" strokeWidth="4" strokeLinecap="round" /></g>
   }
   function cardArt(card: Card) {
-       return <div className={`card-art ${card.kind === 'spell' ? 'spell-card-art' : ''} ${card.kind === 'building' ? 'building-card-art' : ''}`} style={{ '--portrait-color': card.color } as React.CSSProperties}><span className="portrait-number">0{cards.indexOf(card) + 1}</span><svg viewBox={card.kind === 'spell' ? '-52 -58 104 94' : card.kind === 'building' ? '-45 -52 90 105' : card.name === 'Fanmarsch' ? '-58 -78 130 110' : card.name === 'Flitzer' ? '-42 -70 84 82' : card === cards[7] || card === cards[15] ? '-33 -82 66 78' : '-33 -69 66 65'} aria-hidden="true">{card.kind === 'spell' ? spellArt(card) : card.kind === 'building' ? <g><path d="M-30-5 0 10 30-5 0-20Z" fill="#252f2c" stroke="#111c17" strokeWidth="3" /><path d="M-27-6 0 6 27-6 0-14Z" fill={card.name === 'Würstchenbude' ? '#b87843' : '#c99b42'} /><path d="M-24-5V30L0 42V7Z" fill="#5b6255" stroke="#242d27" strokeWidth="2" /><path d="M0 7 27-6V28L0 42Z" fill="#414b43" stroke="#242d27" strokeWidth="2" /><path d="M-18-2H-2V10H-18Z" fill="#e2d49c" /><path d="M-8-22V-36H17V-25" stroke="#a8a794" strokeWidth="2" /><path d="M-8-36H17V-25H-8Z" fill={card.name === 'Würstchenbude' ? '#d08b50' : '#d8c77e'} stroke="#1c2a24" strokeWidth="2" /><text x="4" y="-28" textAnchor="middle" fill="#273226" fontSize="6" fontWeight="900">{card.name === 'Würstchenbude' ? 'WURST' : 'BIER'}</text><path d="M10 26Q18 18 25 26V34H10Z" fill="#b98a35" /></g> : card.name === 'Fanmarsch' ? <Fanmarsch side="blue" /> : card.name === 'Flitzer' ? <Flitzer side="blue" back={false} /> : <Fan card={card} />}</svg></div>
+        return <div className={`card-art ${card.kind === 'spell' ? 'spell-card-art' : ''} ${card.kind === 'building' ? 'building-card-art' : ''}`} style={{ '--portrait-color': card.color } as React.CSSProperties}><span className="portrait-number">0{cards.indexOf(card) + 1}</span><svg viewBox={card.kind === 'spell' ? '-52 -58 104 94' : card.kind === 'building' ? '-45 -52 90 105' : card.name === 'Fanmarsch' ? '-58 -78 130 110' : card.name === 'Flitzer' ? '-42 -70 84 82' : '-33 -69 66 65'} aria-hidden="true">{card.kind === 'spell' ? spellArt(card) : card.kind === 'building' ? <g><path d="M-30-5 0 10 30-5 0-20Z" fill="#252f2c" stroke="#111c17" strokeWidth="3" /><path d="M-27-6 0 6 27-6 0-14Z" fill={card.name === 'Würstchenbude' ? '#b87843' : '#c99b42'} /><path d="M-24-5V30L0 42V7Z" fill="#5b6255" stroke="#242d27" strokeWidth="2" /><path d="M0 7 27-6V28L0 42Z" fill="#414b43" stroke="#242d27" strokeWidth="2" /><path d="M-18-2H-2V10H-18Z" fill="#e2d49c" /><path d="M-8-22V-36H17V-25" stroke="#a8a794" strokeWidth="2" /><path d="M-8-36H17V-25H-8Z" fill={card.name === 'Würstchenbude' ? '#d08b50' : '#d8c77e'} stroke="#1c2a24" strokeWidth="2" /><text x="4" y="-28" textAnchor="middle" fill="#273226" fontSize="6" fontWeight="900">{card.name === 'Würstchenbude' ? 'WURST' : 'BIER'}</text><path d="M10 26Q18 18 25 26V34H10Z" fill="#b98a35" /></g> : card.name === 'Fanmarsch' ? <Fanmarsch side="blue" /> : card.name === 'Flitzer' ? <Flitzer side="blue" back={false} /> : card.name === 'Nachwuchs' ? <g>{[-22, -11, 0, 11, 22].flatMap(x => [-48, -30, -12].map(y => <g key={`${x}-${y}`} transform={`translate(${x} ${y}) scale(.2)`}><Fan card={card} /></g>))}</g> : <Fan card={card} />}</svg></div>
   }
   return <main className={`app-shell ${page === 'arena' ? 'in-arena' : ''}`}>
     <header className="topbar">
@@ -489,11 +500,11 @@ function App() {
      </section>}
        {page === 'deck' && <section className="page deck-page"><div className="eyebrow">{onlineMode ? 'MULTIPLAYER · ' : ''}DEINE FIRM · {deck.length}/8 KARTEN</div><h1>{onlineMode === 'join' ? 'Dem Derby beitreten.' : onlineMode === 'create' ? 'Ein Derby eröffnen.' : onlineMode === 'matchmake' ? 'Gegner finden.' : 'Die Startelf? Dein Deck.'}</h1><p>Wähle genau acht Karten. Die ersten vier bilden deine Starthand; gespielte Karten wandern ans Ende.</p><div className="collection">{cards.filter(card => !card.hidden).map(card => { const id = cards.indexOf(card)
        const selectedInDeck = deck.indexOf(id)
-       return <article className={`collection-card ${rarityClass(card)} ${selectedInDeck >= 0 ? 'deck-selected' : ''}`} key={id}>{cardArt(card)}<span className={`rarity ${rarityClass(card)}`}>{card.rarity} · {card.cost} Hype</span><h2>{card.name}</h2><p>{card.role}</p><div className="card-stats">{card.hp} HP · {card.damage} Schaden<br />{card.kind === 'building' ? 'Gebäude' : `${card.rate}s Angriff · Tempo ${card.speed}`}</div><button className="secondary" onClick={() => toggleDeck(id)}>{selectedInDeck >= 0 ? `${selectedInDeck + 1} · Entfernen` : '＋ Hinzufügen'}</button>{selectedInDeck >= 0 && <button className="secondary deck-reorder" onClick={() => reorder(selectedInDeck)}>Nach vorne ↑</button>}</article>
+       return <article className={`collection-card ${rarityClass(card)} ${selectedInDeck >= 0 ? 'deck-selected' : ''}`} key={id}><span className="card-cost">{card.cost}</span>{cardArt(card)}<span className={`rarity ${rarityClass(card)}`}>{card.rarity} · {card.cost} Hype</span><h2>{card.name}</h2><p>{card.role}</p><div className="card-stats">{card.hp} HP · {card.damage} Schaden<br />{card.kind === 'building' ? 'Gebäude' : `${card.rate}s Angriff · Tempo ${card.speed}`}</div><button className="secondary" onClick={() => toggleDeck(id)}>{selectedInDeck >= 0 ? `${selectedInDeck + 1} · Entfernen` : '＋ Hinzufügen'}</button>{selectedInDeck >= 0 && <button className="secondary deck-reorder" onClick={() => reorder(selectedInDeck)}>Nach vorne ↑</button>}</article>
        })}</div><button className="primary" disabled={deck.length !== 8} onClick={start}>{onlineMode === 'join' ? 'DERBY BEITRETEN' : onlineMode === 'create' ? 'EINLADUNG ERSTELLEN' : onlineMode === 'matchmake' ? 'GEGNER SUCHEN' : 'MIT DIESEM DECK SPIELEN'} <Play size={18} /></button></section>}
      {page === 'arena' && <section className={`page arena-page ${game.result ? 'showing-result' : ''}`}>
          <div className="mobile-match-timer" aria-label="Verbleibende Spielzeit">{formattedTime}</div>
-        <div className="heading-row"><div><div className="eyebrow"><span className="live-dot" /> HOOL ARENA · GEGEN KI</div><h1>Hool Arena</h1><p>Block gegen Block. Nur einer bleibt stehen.</p></div><div className="match-meta"><div><span>{suddenDeath ? 'SUDDEN DEATH' : time <= 60 ? 'FINALE PHASE' : 'HEIMSPIEL'}</span><strong>{suddenDeath ? 'VERLÄNGERUNG' : time <= 60 ? '2× HYPE' : 'HOOL ARENA'}</strong></div><div className={`timer ${time <= 30 ? 'urgent' : ''}`}>{formattedTime}</div><button className="icon-button" disabled={!!game.result || countdown !== null} onClick={() => setRunning(v => !v)} aria-label={running ? 'Pausieren' : 'Fortsetzen'}>{running ? <Pause size={18} /> : <Play size={18} />}</button></div></div>
+          <div className="heading-row"><div><div className="eyebrow"><span className="live-dot" /> HOOL ARENA · GEGEN KI</div><h1>Hool Arena</h1><p>Block gegen Block. Nur einer bleibt stehen.</p></div><div className="match-meta"><div><span>{suddenDeath ? 'SUDDEN DEATH' : time <= 60 ? 'FINALE PHASE' : 'HEIMSPIEL'}</span><strong>{suddenDeath ? 'VERLÄNGERUNG' : time <= 60 ? '2× HYPE' : 'HOOL ARENA'}</strong></div><div className={`timer ${time <= 30 ? 'urgent' : ''}`}>{formattedTime}</div><button className="icon-button" disabled={!!game.result || countdown !== null} onClick={() => setRunning(v => !v)} aria-label={running ? 'Pausieren' : 'Fortsetzen'}>{running ? <Pause size={18} /> : <Play size={18} />}</button></div></div>
        <div className={`game-layout ${game.result ? 'has-result' : ''}`}>
          <aside className="sidebar left-sidebar"><div className="player-card blue-player"><div className="player-id"><div className="crest blue-crest">HA</div><div><b>Deine Firm</b><small>Hool Arena FC</small></div></div><div className="score">{blueScore}</div></div><div className="stat-card"><div className="stat-title">DEIN CLUBHAUS <Heart size={14} /></div><div className="health-value">{Math.ceil(buildingHp.blueFortress)} <small>/ 2.400 HP</small></div><div className="health-bar"><i style={{ width: `${buildingHp.blueFortress / 24}%` }} /></div><div className="stat-foot"><Shield size={13} /> Heimvorteil</div></div><div className="tip-card"><Zap size={17} /><div><b>Dein Spielzug</b><p>Karte wählen und links platzieren; ab der letzten Spielminute steigt der Gebäudeschaden.</p></div></div></aside>
          <section className="arena-wrap"><div className="arena">
@@ -503,10 +514,8 @@ function App() {
              <div className="countdown-number">{countdown === 'go' ? 'LOS GEHT’S' : countdown}</div>
              <div className="countdown-subtitle">{countdown === 'go' ? 'DAS DERBY LÄUFT' : 'BEREIT MACHEN'}</div>
            </div>}
-         <div className="arena-topline"><span><i /> LIVE FROM THE BLOCKS</span><span>HOOL ARENA <b>{blueScore} : {redScore}</b> KIEZ</span><span>23:47 · FLUTLICHT</span></div>
-           {usePhaserArena
-             ? <PhaserArena game={game} selectedCard={selectedCard} dragging={draggingCard} perspective={onlineRole} active={running && !game.result} onPlace={(x, y, drop) => { place(x, y, drop ? dragged.current ?? selected : selected); dragged.current = null; setDraggingCard(false) }} />
-             : <Arena game={game} selectedCard={selectedCard} perspective={onlineRole} active={running && !game.result} dragging={draggingCard} onPlace={(x, y, drop) => { place(x, y, drop ? dragged.current ?? selected : selected); dragged.current = null; setDraggingCard(false) }} />}
+          <div className="arena-topline"><span><i /> LIVE FROM THE BLOCKS</span><span>HOOL ARENA <b>{blueScore} : {redScore}</b> KIEZ</span><span>{onlineStatus === 'playing' ? `● ONLINE${latency === null ? '' : ` · ${latency} ms`}` : onlineStatus === 'connecting' ? '○ VERBINDET …' : '23:47 · FLUTLICHT'}</span></div>
+            <PhaserArena game={game} selectedCard={selectedCard} dragging={draggingCard} perspective={onlineRole} showUnitStates={showUnitStates} active={running && !game.result} onPlace={(x, y, drop) => { place(x, y, drop ? dragged.current ?? selected : selected); dragged.current = null; setDraggingCard(false) }} />
           <div className="arena-bottomline"><span>HOME END <b>↗</b></span><span>BETON. RAUCH. RIVALITÄT.</span><span><b>↙</b> AWAY END</span></div>
             {countdown === null && (!running || game.result) && (game.result ? <div className={`match-overlay result-overlay ${game.result === 'DERBYSIEG!' ? 'result-win' : 'result-loss'}`}>
              <div className="result-kicker">{game.result === 'DERBYSIEG!' ? 'DIE KURVE DREHT DURCH' : 'DER BLOCK IST GEFALLEN'}</div>
@@ -532,14 +541,14 @@ function App() {
              </div>
                <p>{game.result === 'DERBYSIEG!' ? `Außenposten: ${blueScore} : ${redScore} · ${Math.round(game.totalDamage)} Gesamtschaden · Die Nacht gehört Hool Arena.` : `Außenposten: ${blueScore} : ${redScore} · ${Math.round(game.totalDamage)} Gesamtschaden · Aufstehen, Krone richten.`}</p>
               <div className="result-actions"><button className="primary" onClick={start}>REVANCHE <Play size={18} /></button><button className="secondary" onClick={() => setPage('menu')}>Hauptmenü</button></div>
-             </div> : onlineStatus !== 'offline' ? <div className="match-overlay multiplayer-overlay"><Swords size={40} /><h2>{onlineStatus === 'waiting' ? onlineMode === 'matchmake' ? 'GEGNER WIRD GESUCHT' : 'DEIN DERBY-WARTERAUM' : 'VERBINDUNG WIRD HERGESTELLT'}</h2><p>{onlineStatus === 'waiting' ? onlineMode === 'matchmake' ? 'Du wirst automatisch mit dem nächsten Spieler verbunden.' : 'Link schicken oder QR-Code scannen:' : onlineMessage || 'Der Multiplayer-Server wird kontaktiert …'}</p>{onlineMode !== 'matchmake' && inviteLink && <div className="invite-link">{inviteQr && <img className="invite-qr" src={inviteQr} alt="QR-Code für die Derby-Einladung" />}<code>{inviteLink}</code><button className="secondary" onClick={() => navigator.clipboard?.writeText(inviteLink)}>LINK KOPIEREN</button></div>}{onlineMessage && onlineStatus === 'waiting' && <small>{onlineMessage}</small>}<button className="secondary" onClick={() => { socket.current?.close(); setOnlineStatus('offline'); setOnlineMode(null); setPage('menu') }}>Abbrechen</button></div> : <div className="match-overlay"><Trophy size={40} /><h2>HALBZEIT IM KOPF.</h2><p>Kurz durchatmen. Dein Derby wartet.</p><button className="primary" onClick={() => setRunning(true)}>WEITERSPIELEN <Play size={18} /></button><button className="secondary" onClick={() => setPage('menu')}>Hauptmenü</button></div>)}
+             </div> : onlineStatus !== 'offline' ? <div className="match-overlay multiplayer-overlay"><Swords size={40} /><h2>{onlineStatus === 'waiting' ? onlineMode === 'matchmake' ? 'GEGNER WIRD GESUCHT' : 'DEIN DERBY-WARTERAUM' : 'VERBINDUNG WIRD HERGESTELLT'}</h2><p>{onlineStatus === 'waiting' ? onlineMode === 'matchmake' ? 'Du wirst automatisch mit dem nächsten Spieler verbunden.' : 'Link schicken oder QR-Code scannen:' : onlineMessage || 'Der Multiplayer-Server wird kontaktiert …'}</p>{onlineMode !== 'matchmake' && inviteLink && <div className="invite-link">{inviteQr && <img className="invite-qr" src={inviteQr} alt="QR-Code für die Derby-Einladung" />}<code>{inviteLink}</code><button className="secondary" onClick={() => navigator.clipboard?.writeText(inviteLink)}>LINK KOPIEREN</button></div>}{onlineMessage && onlineStatus === 'waiting' && <small>{onlineMessage}</small>}{onlineStatus === 'connecting' && onlineMessage && <button className="secondary" onClick={startOnline}>ERNEUT VERBINDEN</button>}<button className="secondary" onClick={() => { socket.current?.close(); setOnlineStatus('offline'); setOnlineMode(null); setPage('menu') }}>Abbrechen</button></div> : <div className="match-overlay"><Trophy size={40} /><h2>HALBZEIT IM KOPF.</h2><p>Kurz durchatmen. Dein Derby wartet.</p><button className="primary" onClick={() => setRunning(true)}>WEITERSPIELEN <Play size={18} /></button><button className="secondary" onClick={() => setPage('menu')}>Hauptmenü</button></div>)}
          </div><div className="arena-legend"><span><i className="legend-dot blue" /> DEINE FIRM</span><span><i className="legend-dot red" /> KIEZ FIRM</span><span>{game.overtime > 0 ? 'SUDDEN DEATH' : '2 LANES · 2 BRÜCKEN'}</span></div></section>
          <aside className="sidebar right-sidebar"><div className="player-card red-player"><div className="score">{redScore}</div><div className="player-id"><div className="crest red-crest">K</div><div><b>KiezKalle <span className="cpu-badge">KI</span></b><small>Auswärtsblock</small></div></div></div><div className="stat-card"><div className="stat-title">RIVALEN-CLUBHAUS <Heart size={14} /></div><div className="health-value">{Math.ceil(buildingHp.redFortress)} <small>/ 2.400 HP</small></div><div className="health-bar red-health"><i style={{ width: `${buildingHp.redFortress / 24}%` }} /></div></div><div className="combat-log"><div className="stat-title">LIVE-TICKER <Swords size={14} /></div>{game.log.map((entry, i) => <p key={i}>{entry}</p>)}</div></aside>
       </div>
        <div className="bottom-panel"><div className="hype"><div className="hype-label"><Flame size={17} /> HYPE <b>{hype.toFixed(1)}</b><span>/ 10</span></div><div className="hype-bar"><i style={{ width: `${hypePercent}%` }} /></div><small>+{time <= 60 ? '0,95' : '0,48'} / Sekunde</small></div>
           <div className="hand">{myQueue.slice(0, 4).map((id, index) => { const card = cards[id]; return <button title={`${card.name} · ${card.role} · ${card.cost} Hype`} draggable={false} onPointerDown={e => { e.preventDefault(); dragged.current = index; setSelected(index); setDraggingCard(true) }} className={`card ${rarityClass(card)} ${selected === index ? 'selected' : ''} ${hype < card.cost ? 'disabled' : ''}`} key={id} onClick={() => { setSelected(index); setDraggingCard(false) }} aria-label={`${card.name}, ${card.cost} Hype`} aria-pressed={selected === index}><span className="card-cost">{card.cost}</span>{cardArt(card)}<b>{card.name}</b><small>{card.role}</small></button> })}</div>
-         <div className="panel-actions"><div className="next-card-preview" title={`Nächste Karte: ${nextCard.name}`}><div className="next-card-art">{cardArt(nextCard)}</div><div><small>NÄCHSTE KARTE</small><b>{nextCard.icon} {nextCard.name}</b></div></div><button className="surrender" disabled={!!game.result} onClick={() => { setGame(g => ({ ...g, result: 'AUFGEGEBEN' })); setRunning(false) }}><RotateCcw size={15} /> Aufgeben</button></div>
-      </div><footer><span><Trophy size={13} /> Zerstöre das Clubhaus oder führe nach 3 Minuten bei zerstörten Außenposten.</span><span>v0.9 · TRAINING MVP</span></footer>
+          <div className="panel-actions"><div className="next-card-preview" title={`Nächste Karte: ${nextCard.name}`}><div className="next-card-art">{cardArt(nextCard)}</div><div><small>NÄCHSTE KARTE</small><b>{nextCard.icon} {nextCard.name}</b></div></div><button className="icon-button" onClick={() => setShowUnitStates(v => !v)} aria-label={showUnitStates ? 'Einheitenzustände ausblenden' : 'Einheitenzustände anzeigen'} title={showUnitStates ? 'Einheitenzustände ausblenden' : 'Einheitenzustände anzeigen'}>{showUnitStates ? <EyeOff size={18} /> : <Eye size={18} />}</button><button className="surrender" disabled={!!game.result} onClick={() => { setGame(g => ({ ...g, result: 'AUFGEGEBEN' })); setRunning(false) }}><RotateCcw size={15} /> Aufgeben</button></div>
+       </div><footer><span><Trophy size={13} /> Zerstöre das Clubhaus oder führe nach 3 Minuten bei zerstörten Außenposten.</span><span>v0.11 · TRAINING MVP</span></footer>
       {message && <div className="toast" role="status">{message}</div>}
     </section>}
   </main>
