@@ -132,6 +132,12 @@ test('beer stalls decay, spawn cup throwers and can be attacked as buildings', (
   g = tick(g, .05)
   assert.ok(g.structures[0].hp < hp)
 })
+test('beer stall spawns exit toward own side and choose the nearest lane', () => {
+  const g = deploy(newGame([16]), 0, 30, 47)
+  assert.equal(g.structures.length, 1)
+  assert.equal(g.units[0].lane, 0, 'the ninth field is closer to the left lane')
+  assert.ok(g.units[0].x < g.structures[0].x, 'blue units leave through the lower side of the stall')
+})
 test('sausage stalls spawn an aggressive vendor when destroyed', () => {
   let g = newGame([18])
   g.aiClock = 10000
@@ -223,6 +229,20 @@ test('timeout uses outposts and supports draws', () => {
   loss.hp.bluePubOne = 0
   loss.hp.bluePubTwo = 0
   assert.equal(finish(loss).result, 'NIEDERLAGE')
+})
+test('regulation ends immediately on an outpost lead, while a tie starts sudden death', () => {
+  const win = fresh()
+  win.time = .01
+  win.hp.redPubOne = 0
+  const finished = tick(win, .05)
+  assert.equal(finished.result, 'DERBYSIEG!')
+  assert.equal(finished.overtime, 0)
+
+  const tie = fresh()
+  tie.time = .01
+  const suddenDeath = tick(tie, .05)
+  assert.equal(suddenDeath.result, null)
+  assert.ok(suddenDeath.overtime > 0)
 })
 test('full match stays bounded, AI uses both lanes, finale regenerates faster', () => {
   let seed = 12

@@ -13,6 +13,7 @@ type PhaserArenaProps = {
   perspective?: Side
   showUnitStates?: boolean
   onPlace: (x: number, y: number, drop: boolean) => void
+  onReady?: () => void
 }
 
 type ArenaScene = PhaserType.Scene & {
@@ -42,7 +43,7 @@ function cardColor(card: Card) {
  * state into pixels and owns pointer input, so it can eventually replace the
  * Phaser arena without changing multiplayer or simulation code.
  */
-export function PhaserArena({ game, selectedCard, active, dragging = false, perspective = 'blue', showUnitStates = false, onPlace }: PhaserArenaProps) {
+export function PhaserArena({ game, selectedCard, active, dragging = false, perspective = 'blue', showUnitStates = false, onPlace, onReady }: PhaserArenaProps) {
   const host = useRef<HTMLDivElement>(null)
   const gameRef = useRef(game)
   const selectedRef = useRef(selectedCard)
@@ -51,6 +52,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
   const perspectiveRef = useRef(perspective)
   const showUnitStatesRef = useRef(showUnitStates)
   const onPlaceRef = useRef(onPlace)
+  const onReadyRef = useRef(onReady)
 
   gameRef.current = game
   selectedRef.current = selectedCard
@@ -59,6 +61,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
   perspectiveRef.current = perspective
   showUnitStatesRef.current = showUnitStates
   onPlaceRef.current = onPlace
+  onReadyRef.current = onReady
 
   useEffect(() => {
     if (!host.current) return
@@ -77,6 +80,10 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
         const usedSprites = new Set<string>()
         const buildingHpLabels = new Map<string, PhaserType.GameObjects.Text>()
         const usedBuildingHpLabels = new Set<string>()
+        const damageLabels = new Map<number, PhaserType.GameObjects.Text>()
+        const usedDamageLabels = new Set<number>()
+        const bridgeQueueLabels = new Map<number, PhaserType.GameObjects.Text>()
+        const usedBridgeQueueLabels = new Set<number>()
         const bars = this.add.graphics().setDepth(10)
         const displaySide = (side: Side): Side => side === perspectiveRef.current ? 'blue' : 'red'
         const spawnIndicators = this.add.graphics().setDepth(11)
@@ -769,6 +776,45 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
              feedbackIndicators.lineStyle(1.4, 0xffe5ad, .7 * fade)
              feedbackIndicators.lineBetween(p.x - radius * .8, p.y - event.age * 10, p.x + radius * .8, p.y - event.age * 10)
              feedbackIndicators.lineBetween(p.x, p.y - event.age * 10 - radius * .8, p.x, p.y - event.age * 10 + radius * .8)
+             const label = damageLabels.get(event.id) ?? this.add.text(0, 0, '').setOrigin(.5).setDepth(13)
+             damageLabels.set(event.id, label)
+             usedDamageLabels.add(event.id)
+             label.setPosition(p.x, p.y - 26 - event.age * 30)
+               .setText(`${event.kind === 'heal' ? '+' : '-'}${Math.max(1, Math.round(event.amount))}`)
+               .setAlpha(fade)
+               .setStyle({
+                 color: event.kind === 'building' ? '#ffd36b' : event.kind === 'area' ? '#dc91ef' : '#ff8068',
+                 fontFamily: 'Arial Black, sans-serif',
+                 fontSize: '12px',
+                 stroke: '#101712',
+                 strokeThickness: 4,
+               })
+           }
+           const bridgeUnits = current.units.filter(unit =>
+             unit.hp > 0 && (unit.spawnDelay ?? 0) <= 0 && unit.state === 'bridge' && unit.card.range <= 4,
+           )
+           for (const lane of [0, 1] as const) {
+             for (const side of ['blue', 'red'] as const) {
+               const queued = bridgeUnits
+                 .filter(unit => unit.lane === lane && unit.side === side)
+                 .sort((a, b) => side === 'blue' ? b.x - a.x : a.x - b.x)
+               queued.forEach((unit, index) => {
+                 const p = visualPoint(unit)
+                 const label = bridgeQueueLabels.get(unit.id) ?? this.add.text(0, 0, '')
+                   .setOrigin(.5).setDepth(13)
+                 bridgeQueueLabels.set(unit.id, label)
+                 usedBridgeQueueLabels.add(unit.id)
+                 label.setPosition(p.x, p.y - 16)
+                   .setText(`${index === 0 ? '▶' : index + 1}`)
+                   .setStyle({
+                     color: index === 0 ? '#ffe39a' : '#d7dfc0',
+                     fontFamily: 'Arial Black, sans-serif',
+                     fontSize: index === 0 ? '11px' : '10px',
+                     stroke: '#101712',
+                     strokeThickness: 3,
+                   })
+               })
+             }
            }
            for (const unit of current.units) {
              if (unit.side !== perspectiveRef.current || (unit.spawnDelay ?? 0) > 0 || !unit.targetId) continue
@@ -913,6 +959,8 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
         scene.renderArena = () => {
            usedSprites.clear()
            usedBuildingHpLabels.clear()
+           usedDamageLabels.clear()
+           usedBridgeQueueLabels.clear()
            bars.clear()
            stateIndicators.clear()
            feedbackIndicators.clear()
@@ -939,15 +987,28 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
            }
            drawEffects()
            for (const [id, label] of buildingHpLabels) if (!usedBuildingHpLabels.has(id)) label.setVisible(false)
+           for (const [id, label] of damageLabels) {
+             if (!usedDamageLabels.has(id)) {
+               label.destroy()
+               damageLabels.delete(id)
+             }
+           }
+           for (const [id, label] of bridgeQueueLabels) {
+             if (!usedBridgeQueueLabels.has(id)) {
+               label.destroy()
+               bridgeQueueLabels.delete(id)
+             }
+           }
            drawPlacement()
-          drawPhaseAlert()
+         drawPhaseAlert()
           for (const [id, sprite] of sprites) {
             if (!usedSprites.has(id)) {
               sprite.destroy()
               sprites.delete(id)
-            }
-          }
-        }
+           }
+         }
+         onReadyRef.current?.()
+       }
         this.events.on(Phaser.Scenes.Events.UPDATE, (_time: number, delta: number) => {
           if (document.hidden) return
           renderDelta = Math.min(.05, Math.max(.001, delta / 1000))

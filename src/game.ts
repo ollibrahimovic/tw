@@ -121,6 +121,19 @@ function makeUnits(startId: number, x: number, y: number, side: Side, lane: numb
     } satisfies Unit
   })
 }
+function structureSpawnLane(structure: Structure) {
+  const tile = toTile(structure)
+  return Math.abs(tile.x - 4) <= Math.abs(tile.x - 15) ? 0 : 1
+}
+function structureSpawnPoint(structure: Structure) {
+  const tile = toTile(structure)
+  // Leave through the side of the stall facing the owning half before
+  // steering horizontally toward the nearest lane.
+  return fromTile({
+    x: tile.x,
+    y: tile.y + (structure.side === 'blue' ? 2 : -2),
+  })
+}
 const activeUnit = (unit: Unit) => unit.hp > 0 && (unit.spawnDelay ?? 0) <= 0
 const targetableUnit = (unit: Unit) => unit.hp > 0
 export function deploymentPoint(g: Game, card: Card, x: number, y: number, side: Side = 'blue') {
@@ -198,7 +211,8 @@ export function deploy(g: Game, slot: number, x: number, y: number, side: Side =
   if (card.kind === 'building') {
     const structure: Structure = { id: g.id, x, y, side, card, hp: card.hp, max: card.hp, cooldown: 0, age: 0 }
     if (card === cards[16]) {
-      const spawned = makeUnits(g.id + 1, x, y, side, y < 49 ? 0 : 1, cards[2])
+      const spawn = structureSpawnPoint(structure)
+      const spawned = makeUnits(g.id + 1, spawn.x, spawn.y, side, structureSpawnLane(structure), cards[2])
         .map(unit => ({ ...unit, spawnDelay: 0, spawnDuration: 0 }))
       return { ...update, structures: [...g.structures, structure], units: [...g.units, ...spawned], id: g.id + 1 + spawned.length }
     }
@@ -546,8 +560,9 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
     if (structure.card !== cards[16]) continue
     while (structure.age + 1e-9 >= BEER_STALL_SPAWN_INTERVAL && structure.hp > 0) {
       structure.age -= BEER_STALL_SPAWN_INTERVAL
-      const lane = structure.y < 49 ? 0 : 1
-      const spawned = makeUnits(g.id, structure.x, structure.y, structure.side, lane, cards[2])
+       const lane = structureSpawnLane(structure)
+       const spawn = structureSpawnPoint(structure)
+       const spawned = makeUnits(g.id, spawn.x, spawn.y, structure.side, lane, cards[2])
         .map(unit => ({ ...unit, spawnDelay: 0, spawnDuration: 0 }))
       g.units.push(...spawned)
       g.id += spawned.length
@@ -556,8 +571,9 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
   }
   for (const structure of g.structures) {
     if (structure.hp > 0 || structure.card !== cards[18]) continue
-    const lane = structure.y < 49 ? 0 : 1
-    const spawned = makeUnits(g.id, structure.x, structure.y, structure.side, lane, cards[17])
+    const lane = structureSpawnLane(structure)
+    const spawn = structureSpawnPoint(structure)
+    const spawned = makeUnits(g.id, spawn.x, spawn.y, structure.side, lane, cards[17])
       .map(unit => ({ ...unit, spawnDelay: 0, spawnDuration: 0 }))
     g.units.push(...spawned)
     g.id += spawned.length
@@ -779,10 +795,18 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
   g.units = g.units.filter(u => u.hp > 0)
   if (g.hp.redFortress <= 0) g.result = 'DERBYSIEG!'
   else if (g.hp.blueFortress <= 0) g.result = 'NIEDERLAGE'
-  else if (g.time <= 0 && g.overtime >= SUDDEN_DEATH_DURATION) {
+  else if (g.time <= 0) {
     const blue = Number(g.hp.redPubOne <= 0) + Number(g.hp.redPubTwo <= 0)
     const red = Number(g.hp.bluePubOne <= 0) + Number(g.hp.bluePubTwo <= 0)
-    g.result = blue === red ? 'UNENTSCHIEDEN' : blue > red ? 'DERBYSIEG!' : 'NIEDERLAGE'
+    const matchJustEnded = previous.time > 0
+    if (blue !== red) {
+      g.result = blue > red ? 'DERBYSIEG!' : 'NIEDERLAGE'
+    } else if (matchJustEnded) {
+      // Only a tied score after regulation starts sudden death.
+      g.overtime = Math.max(g.overtime, dt)
+    } else if (g.overtime >= SUDDEN_DEATH_DURATION) {
+      g.result = 'UNENTSCHIEDEN'
+    }
   }
   return g
 }

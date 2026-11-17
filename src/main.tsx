@@ -13,7 +13,12 @@ import './derby.css'
 import './feedback.css'
 import './menu-overrides.css'
 
-const APP_VERSION = '0.11'
+const APP_VERSION = '0.15'
+const loadingMessages = [
+  'Fäuste werden bandagiert',
+  'Zahnschutz wird angelegt',
+  'Bengalos werden ausgepackt',
+]
 
 function loadDeck(): number[] {
   try {
@@ -74,6 +79,9 @@ function App() {
   const [page, setPage] = useState<'menu' | 'arena' | 'deck'>(preview ? 'arena' : initialMatch ? 'deck' : 'menu')
   const [running, setRunning] = useState(false)
   const [countdown, setCountdown] = useState<number | 'go' | null>(null)
+  const [arenaReady, setArenaReady] = useState(false)
+  const [loadingActive, setLoadingActive] = useState(false)
+  const [loadingStep, setLoadingStep] = useState(0)
   const [onlineMode, setOnlineMode] = useState<'create' | 'join' | 'matchmake' | null>(initialMatch ? 'join' : null)
   const [onlineStatus, setOnlineStatus] = useState<'offline' | 'connecting' | 'waiting' | 'playing'>('offline')
   const [latency, setLatency] = useState<number | null>(null)
@@ -92,11 +100,16 @@ function App() {
   const [draggingCard, setDraggingCard] = useState(false)
   const socket = useRef<WebSocket | null>(null)
   const audio = useRef<AudioContext | null>(null)
+  const audioClips = useRef<Record<string, HTMLAudioElement>>({})
+  const backgroundMusic = useRef<HTMLAudioElement | null>(null)
   const dragged = useRef<number | null>(null)
   const lastShot = useRef(0)
   const lastResult = useRef<string | null>(null)
   const seenSpellIds = useRef(new Set<number>())
+  const seenFlareIds = useRef(new Set<number>())
+  const seenPuddleIds = useRef(new Set<number>())
   const seenImpactIds = useRef(new Set<number>())
+  const hasDrummer = game.units.some(unit => unit.card.name === 'Der Trommler' && (unit.spawnDelay ?? 0) <= 0 && unit.hp > 0)
   const previousStructureIds = useRef(new Set<number>())
   const previousBuildingHp = useRef({ ...game.hp })
   const buildingHp = onlineRole === 'blue' ? game.hp : {
@@ -116,6 +129,8 @@ function App() {
   const suddenDeath = game.overtime > 0
   const blueScore = Number(buildingHp.redPubOne <= 0) + Number(buildingHp.redPubTwo <= 0)
   const redScore = Number(buildingHp.bluePubOne <= 0) + Number(buildingHp.bluePubTwo <= 0)
+  const matchDuration = game.overtime > 0 ? 180 + game.overtime : Math.max(0, 180 - game.time)
+  const formattedMatchDuration = `${Math.floor(matchDuration / 60).toString().padStart(2, '0')}:${Math.floor(matchDuration % 60).toString().padStart(2, '0')}`
 
   useEffect(() => {
     if (page !== 'arena') return
@@ -124,6 +139,9 @@ function App() {
       socket.current = null
       connection?.close()
     }
+  }, [page])
+  useEffect(() => {
+    if (page !== 'arena') setArenaReady(false)
   }, [page])
 
   useEffect(() => {
@@ -154,100 +172,42 @@ function App() {
     }
   }, [draggingCard])
 
-  function beep(frequency = 180) {
-    if (!sound || !audio.current) return
-    const ctx = audio.current
-    const oscillator = ctx.createOscillator()
-    const gain = ctx.createGain()
-    oscillator.type = 'triangle'
-    oscillator.frequency.setValueAtTime(frequency, ctx.currentTime)
-    oscillator.frequency.exponentialRampToValueAtTime(70, ctx.currentTime + .09)
-    gain.gain.setValueAtTime(.1, ctx.currentTime)
-    gain.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + .12)
-    oscillator.connect(gain).connect(ctx.destination)
-    oscillator.start()
-    oscillator.stop(ctx.currentTime + .13)
+  function playClip(name: string, volume = .65) {
+    if (!sound) return false
+    const clip = audioClips.current[name] ?? (audioClips.current[name] = new Audio(`/audio/${name}.mp3?v=${APP_VERSION}`))
+    clip.muted = false
+    clip.volume = volume
+    clip.currentTime = 0
+    void clip.play().catch(() => {})
+    return true
   }
-  function tone(frequency: number, duration: number, type: OscillatorType = 'triangle', volume = .08, endFrequency = frequency) {
-    if (!sound || !audio.current) return
-    const ctx = audio.current
-    const oscillator = ctx.createOscillator()
-    const gain = ctx.createGain()
-    oscillator.type = type
-    oscillator.frequency.setValueAtTime(frequency, ctx.currentTime)
-    oscillator.frequency.exponentialRampToValueAtTime(Math.max(30, endFrequency), ctx.currentTime + duration)
-    gain.gain.setValueAtTime(volume, ctx.currentTime)
-    gain.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + duration)
-    oscillator.connect(gain).connect(ctx.destination)
-    oscillator.start()
-    oscillator.stop(ctx.currentTime + duration + .02)
-  }
-  function noiseBurst(duration: number, volume = .08, frequency = 900) {
-    if (!sound || !audio.current) return
-    const ctx = audio.current
-    const buffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * duration), ctx.sampleRate)
-    const data = buffer.getChannelData(0)
-    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length)
-    const source = ctx.createBufferSource()
-    const filter = ctx.createBiquadFilter()
-    const gain = ctx.createGain()
-    source.buffer = buffer
-    filter.type = 'lowpass'
-    filter.frequency.setValueAtTime(frequency, ctx.currentTime)
-    gain.gain.setValueAtTime(volume, ctx.currentTime)
-    gain.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + duration)
-    source.connect(filter).connect(gain).connect(ctx.destination)
-    source.start()
-  }
-  function noiseSweep(duration: number, startFrequency: number, endFrequency: number, volume = .08, filterType: BiquadFilterType = 'bandpass') {
-    if (!sound || !audio.current) return
-    const ctx = audio.current
-    const buffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * duration), ctx.sampleRate)
-    const data = buffer.getChannelData(0)
-    for (let i = 0; i < data.length; i++) {
-      const fade = 1 - i / data.length
-      data[i] = (Math.random() * 2 - 1) * Math.sqrt(fade)
+  function primeAudio() {
+    for (const name of ['countdown', 'beer-splash', 'bengalo-impact', 'drum-hit']) {
+      const clip = audioClips.current[name] ?? (audioClips.current[name] = new Audio(`/audio/${name}.mp3?v=${APP_VERSION}`))
+      clip.preload = 'auto'
+      clip.load()
+      clip.muted = true
+      void clip.play().then(() => {
+        clip.pause()
+        clip.currentTime = 0
+        clip.muted = false
+      }).catch(() => {})
     }
-    const source = ctx.createBufferSource()
-    const filter = ctx.createBiquadFilter()
-    const gain = ctx.createGain()
-    source.buffer = buffer
-    filter.type = filterType
-    filter.frequency.setValueAtTime(startFrequency, ctx.currentTime)
-    filter.frequency.exponentialRampToValueAtTime(Math.max(30, endFrequency), ctx.currentTime + duration)
-    filter.Q.setValueAtTime(filterType === 'bandpass' ? 1.4 : .7, ctx.currentTime)
-    gain.gain.setValueAtTime(volume, ctx.currentTime)
-    gain.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + duration)
-    source.connect(filter).connect(gain).connect(ctx.destination)
-    source.start()
+    const track = backgroundMusic.current ?? (backgroundMusic.current = new Audio('/audio/arena-theme.mp3'))
+    track.preload = 'auto'
+    track.load()
   }
   function rocketSound() {
-    // A flare is mostly hiss and pressure, not a musical rising tone.
-    noiseSweep(.72, 5200, 850, .055, 'highpass')
-    noiseSweep(.3, 260, 1250, .035, 'bandpass')
-    tone(64, .56, 'sine', .025, 48)
-    window.setTimeout(() => noiseBurst(.1, .045, 3600), 420)
+    playClip('rocket', .55)
   }
   function spawnSound() {
-    noiseSweep(.18, 160, 1050, .045, 'bandpass')
-    tone(92, .16, 'sine', .07, 58)
-    tone(210, .08, 'triangle', .018, 130)
+    playClip('spawn', .5)
   }
   function impactSound() {
-    noiseSweep(.28, 1700, 180, .14, 'lowpass')
-    tone(72, .34, 'sine', .12, 38)
-    tone(145, .12, 'triangle', .035, 70)
+    playClip('impact', .7)
   }
   function collapseSound() {
-    noiseSweep(.95, 420, 55, .2, 'lowpass')
-    noiseSweep(.48, 1100, 120, .08, 'bandpass')
-    tone(58, .9, 'sine', .13, 30)
-    tone(118, .42, 'sawtooth', .035, 44)
-  }
-  function chantSound() {
-    tone(105, .35, 'triangle', .07, 112)
-    window.setTimeout(() => tone(132, .42, 'triangle', .06, 118), 130)
-    window.setTimeout(() => tone(158, .5, 'triangle', .055, 130), 270)
+    playClip('collapse', .75)
   }
   useEffect(() => {
     if (!running || page !== 'arena' || game.result || onlineStatus === 'playing') return
@@ -255,21 +215,40 @@ function App() {
     return () => clearInterval(id)
   }, [running, page, game.result, onlineStatus])
   useEffect(() => {
-    if (game.shots > lastShot.current) beep(120)
+    if (game.shots > lastShot.current) {
+      playClip('hit', .32)
+    }
     lastShot.current = game.shots
   }, [game.shots])
   useEffect(() => {
+    if (!hasDrummer || !running || page !== 'arena' || game.result) return
+    playClip('drum-hit', .26)
+    const id = window.setInterval(() => playClip('drum-hit', .26), 1400)
+    return () => window.clearInterval(id)
+  }, [hasDrummer, running, page, game.result])
+  useEffect(() => {
+    for (const puddle of game.puddles) {
+      if (seenPuddleIds.current.has(puddle.id)) continue
+      seenPuddleIds.current.add(puddle.id)
+      playClip('beer-splash', .48)
+    }
+    for (const flare of game.flares) {
+      if (seenFlareIds.current.has(flare.id)) continue
+      seenFlareIds.current.add(flare.id)
+      rocketSound()
+    }
     for (const spell of game.spells) {
       if (seenSpellIds.current.has(spell.id)) continue
       seenSpellIds.current.add(spell.id)
       if (spell.type === 'signal' || spell.type === 'salvo') rocketSound()
-      else if (spell.type === 'smoke') noiseBurst(.35, .045, 360)
-      else tone(240, .16, 'sine', .035, 120)
+      else if (spell.type === 'smoke') playClip('impact', .2)
+      else playClip('impact', .2)
     }
     for (const impact of game.impacts) {
       if (seenImpactIds.current.has(impact.id)) continue
       seenImpactIds.current.add(impact.id)
-      impactSound()
+      if (seenFlareIds.current.has(impact.id)) playClip('bengalo-impact', .3)
+      else impactSound()
     }
     for (const building of Object.keys(game.hp) as Array<keyof typeof game.hp>) {
       if (previousBuildingHp.current[building] > 0 && game.hp[building] <= 0) collapseSound()
@@ -281,31 +260,54 @@ function App() {
   }, [game.spells, game.impacts, game.hp])
   useEffect(() => {
     if (game.result && game.result !== lastResult.current) {
-      beep(game.result === 'DERBYSIEG!' ? 420 : 95)
-      window.setTimeout(() => beep(game.result === 'DERBYSIEG!' ? 620 : 70), 120)
+      const resultClip = game.result === 'DERBYSIEG!' ? 'victory' : 'defeat'
+      playClip(resultClip, .8)
     }
     lastResult.current = game.result
   }, [game.result])
-  useEffect(() => {
-    if (!sound || page !== 'arena' || !running || game.result) return
-    const chant = window.setInterval(chantSound, 4200)
-    return () => clearInterval(chant)
-  }, [sound, page, running, game.result])
   useEffect(() => {
     if (!message) return
     const id = setTimeout(() => setMessage(''), 2200)
     return () => clearTimeout(id)
   }, [message])
   useEffect(() => {
-    if (countdown === null) return
+    if (countdown === null || !arenaReady) return
     if (countdown === 'go') {
-      const id = window.setTimeout(() => { setCountdown(null); setRunning(true) }, 850)
+      const id = window.setTimeout(() => {
+        setCountdown(null)
+        setRunning(true)
+      }, 650)
       return () => clearTimeout(id)
     }
-    beep(countdown === 1 ? 520 : 360)
-    const id = window.setTimeout(() => setCountdown(value => value === 'go' ? null : value && value > 1 ? value - 1 : 'go'), 1000)
+    playClip('countdown', countdown === 3 ? .8 : .5)
+    const id = window.setTimeout(() => {
+      setCountdown(value => {
+        if (typeof value !== 'number') return value === 'go' ? 'go' : null
+        return value > 1 ? value - 1 : 'go'
+      })
+    }, 750)
     return () => clearTimeout(id)
-  }, [countdown])
+  }, [countdown, arenaReady])
+  useEffect(() => {
+    if (!loadingActive) return
+    setLoadingStep(0)
+    const id = window.setInterval(() => {
+      setLoadingStep(step => (step + 1) % loadingMessages.length)
+    }, 850)
+    return () => window.clearInterval(id)
+  }, [loadingActive])
+  useEffect(() => {
+    const shouldPlay = sound && page === 'arena' && !game.result && (running || countdown !== null)
+    if (!shouldPlay) {
+      backgroundMusic.current?.pause()
+      return
+    }
+    const track = backgroundMusic.current ?? (backgroundMusic.current = new Audio('/audio/arena-theme.mp3'))
+    track.loop = true
+    track.volume = .12
+    void track.play().catch(() => {})
+    return () => track.pause()
+  }, [sound, page, running, game.result, countdown])
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (page !== 'arena' || game.result) return
@@ -326,8 +328,11 @@ function App() {
     }
     if (!audio.current) audio.current = new AudioContext()
     void audio.current.resume()
+    primeAudio()
     const freshGame = newGame(deck, deck, true, deck)
     setGame(freshGame)
+    seenFlareIds.current.clear()
+    seenPuddleIds.current.clear()
     setSelected(0)
     setOnlineRole(onlineMode === 'join' ? 'red' : 'blue')
     setRunning(false)
@@ -405,7 +410,14 @@ function App() {
         setOnlineRole(message.role || 'blue')
         setGame(localResult(message.state))
         setOnlineStatus('playing')
-        setCountdown(3)
+        setLoadingStep(0)
+        if (arenaReady) {
+          setLoadingActive(false)
+          setCountdown(3)
+        } else {
+          setLoadingActive(true)
+          setCountdown(null)
+        }
         return
       }
       if (message.type === 'state' && message.state) setGame(localResult(message.state))
@@ -415,6 +427,13 @@ function App() {
     }
     connection.onerror = () => fail('Der Multiplayer-Server ist nicht erreichbar. Bitte abbrechen und erneut versuchen.')
     connection.onclose = () => fail('Die Verbindung zum Multiplayer-Server wurde geschlossen. Bitte erneut versuchen.')
+  }
+  function handleArenaReady() {
+    setArenaReady(true)
+    if (loadingActive) {
+      setLoadingActive(false)
+      setCountdown(3)
+    }
   }
   function start() {
     if (deck.length !== 8) {
@@ -428,13 +447,18 @@ function App() {
     }
     if (!audio.current) audio.current = new AudioContext()
     void audio.current.resume()
+    primeAudio()
     const freshGame = newGame(deck)
     setOnlineRole('blue')
     seenSpellIds.current.clear()
     seenImpactIds.current.clear()
     previousStructureIds.current.clear()
     previousBuildingHp.current = { ...freshGame.hp }
-    setGame(freshGame); setSelected(0); setRunning(false); setCountdown(3); setPage('arena')
+    setLoadingStep(0)
+    setLoadingActive(!arenaReady)
+    setGame(freshGame); setSelected(0); setRunning(false); setCountdown(arenaReady ? 3 : null); setPage('arena')
+    seenFlareIds.current.clear()
+    seenPuddleIds.current.clear()
   }
   function place(x: number, y: number, slot = selected) {
     if (!running || game.result || onlineStatus === 'waiting' || onlineStatus === 'connecting') return
@@ -508,16 +532,20 @@ function App() {
        <div className={`game-layout ${game.result ? 'has-result' : ''}`}>
          <aside className="sidebar left-sidebar"><div className="player-card blue-player"><div className="player-id"><div className="crest blue-crest">HA</div><div><b>Deine Firm</b><small>Hool Arena FC</small></div></div><div className="score">{blueScore}</div></div><div className="stat-card"><div className="stat-title">DEIN CLUBHAUS <Heart size={14} /></div><div className="health-value">{Math.ceil(buildingHp.blueFortress)} <small>/ 2.400 HP</small></div><div className="health-bar"><i style={{ width: `${buildingHp.blueFortress / 24}%` }} /></div><div className="stat-foot"><Shield size={13} /> Heimvorteil</div></div><div className="tip-card"><Zap size={17} /><div><b>Dein Spielzug</b><p>Karte wählen und links platzieren; ab der letzten Spielminute steigt der Gebäudeschaden.</p></div></div></aside>
          <section className="arena-wrap"><div className="arena">
-           {countdown !== null && <div className={`countdown-overlay ${countdown === 'go' ? 'countdown-go' : ''}`} role="status" aria-live="assertive">
+             {loadingActive && <div className="countdown-overlay countdown-loading" role="status" aria-live="assertive">
+              <div className="countdown-number countdown-loading-number">HOOLIGANS BEREITEN SICH VOR …</div>
+              <div key={loadingStep} className="countdown-subtitle countdown-loading-copy">{loadingMessages[loadingStep]}</div>
+            </div>}
+            {countdown !== null && arenaReady && <div className={`countdown-overlay ${countdown === 'go' ? 'countdown-go' : ''}`} role="status" aria-live="assertive">
              <div className="countdown-smoke smoke-left" /><div className="countdown-smoke smoke-right" />
              <div className="countdown-pyro pyro-left">✦</div><div className="countdown-pyro pyro-right">✦</div>
-             <div className="countdown-number">{countdown === 'go' ? 'LOS GEHT’S' : countdown}</div>
+              <div className="countdown-number">{countdown === 'go' ? 'SPORT FREI!' : countdown}</div>
              <div className="countdown-subtitle">{countdown === 'go' ? 'DAS DERBY LÄUFT' : 'BEREIT MACHEN'}</div>
            </div>}
           <div className="arena-topline"><span><i /> LIVE FROM THE BLOCKS</span><span>HOOL ARENA <b>{blueScore} : {redScore}</b> KIEZ</span><span>{onlineStatus === 'playing' ? `● ONLINE${latency === null ? '' : ` · ${latency} ms`}` : onlineStatus === 'connecting' ? '○ VERBINDET …' : '23:47 · FLUTLICHT'}</span></div>
-            <PhaserArena game={game} selectedCard={selectedCard} dragging={draggingCard} perspective={onlineRole} showUnitStates={showUnitStates} active={running && !game.result} onPlace={(x, y, drop) => { place(x, y, drop ? dragged.current ?? selected : selected); dragged.current = null; setDraggingCard(false) }} />
+              <PhaserArena game={game} selectedCard={selectedCard} dragging={draggingCard} perspective={onlineRole} showUnitStates={showUnitStates} active={running && !game.result} onReady={handleArenaReady} onPlace={(x, y, drop) => { place(x, y, drop ? dragged.current ?? selected : selected); dragged.current = null; setDraggingCard(false) }} />
           <div className="arena-bottomline"><span>HOME END <b>↗</b></span><span>BETON. RAUCH. RIVALITÄT.</span><span><b>↙</b> AWAY END</span></div>
-            {countdown === null && (!running || game.result) && (game.result ? <div className={`match-overlay result-overlay ${game.result === 'DERBYSIEG!' ? 'result-win' : 'result-loss'}`}>
+             {!loadingActive && countdown === null && (!running || game.result) && (game.result ? <div className={`match-overlay result-overlay ${game.result === 'DERBYSIEG!' ? 'result-win' : 'result-loss'}`}>
              <div className="result-kicker">{game.result === 'DERBYSIEG!' ? 'DIE KURVE DREHT DURCH' : 'DER BLOCK IST GEFALLEN'}</div>
              <h2>{game.result}</h2>
                <div className="result-scene" aria-label={game.result === 'DERBYSIEG!' ? 'Feiernde Hooligans mit Hool-Arena-Siegesbanner' : 'Geschwächte, verletzte Fans nach der Niederlage'}>
@@ -540,14 +568,22 @@ function App() {
                 {game.result !== 'DERBYSIEG!' && <div className="result-blood-pools"><i /><i /><i /></div>}
              </div>
                <p>{game.result === 'DERBYSIEG!' ? `Außenposten: ${blueScore} : ${redScore} · ${Math.round(game.totalDamage)} Gesamtschaden · Die Nacht gehört Hool Arena.` : `Außenposten: ${blueScore} : ${redScore} · ${Math.round(game.totalDamage)} Gesamtschaden · Aufstehen, Krone richten.`}</p>
-              <div className="result-actions"><button className="primary" onClick={start}>REVANCHE <Play size={18} /></button><button className="secondary" onClick={() => setPage('menu')}>Hauptmenü</button></div>
+                <div className="result-stats" aria-label="Detaillierte Ergebnisstatistik">
+                  <div><b>{Math.round(game.totalDamage)}</b><span>Schaden</span></div>
+                  <div><b>{game.shots}</b><span>Angriffe</span></div>
+                  <div><b>{blueScore}</b><span>Außenposten</span></div>
+                  <div><b>{formattedMatchDuration}</b><span>Matchdauer</span></div>
+                  <div><b>{Math.ceil(buildingHp.blueFortress)}</b><span>Dein Clubhaus-HP</span></div>
+                  <div><b>{Math.ceil(buildingHp.redFortress)}</b><span>Gegner-Clubhaus-HP</span></div>
+                </div>
+                <div className="result-actions"><button className="primary" onClick={start}>REVANCHE <Play size={18} /></button><button className="secondary" onClick={() => setPage('menu')}>Hauptmenü</button></div>
              </div> : onlineStatus !== 'offline' ? <div className="match-overlay multiplayer-overlay"><Swords size={40} /><h2>{onlineStatus === 'waiting' ? onlineMode === 'matchmake' ? 'GEGNER WIRD GESUCHT' : 'DEIN DERBY-WARTERAUM' : 'VERBINDUNG WIRD HERGESTELLT'}</h2><p>{onlineStatus === 'waiting' ? onlineMode === 'matchmake' ? 'Du wirst automatisch mit dem nächsten Spieler verbunden.' : 'Link schicken oder QR-Code scannen:' : onlineMessage || 'Der Multiplayer-Server wird kontaktiert …'}</p>{onlineMode !== 'matchmake' && inviteLink && <div className="invite-link">{inviteQr && <img className="invite-qr" src={inviteQr} alt="QR-Code für die Derby-Einladung" />}<code>{inviteLink}</code><button className="secondary" onClick={() => navigator.clipboard?.writeText(inviteLink)}>LINK KOPIEREN</button></div>}{onlineMessage && onlineStatus === 'waiting' && <small>{onlineMessage}</small>}{onlineStatus === 'connecting' && onlineMessage && <button className="secondary" onClick={startOnline}>ERNEUT VERBINDEN</button>}<button className="secondary" onClick={() => { socket.current?.close(); setOnlineStatus('offline'); setOnlineMode(null); setPage('menu') }}>Abbrechen</button></div> : <div className="match-overlay"><Trophy size={40} /><h2>HALBZEIT IM KOPF.</h2><p>Kurz durchatmen. Dein Derby wartet.</p><button className="primary" onClick={() => setRunning(true)}>WEITERSPIELEN <Play size={18} /></button><button className="secondary" onClick={() => setPage('menu')}>Hauptmenü</button></div>)}
          </div><div className="arena-legend"><span><i className="legend-dot blue" /> DEINE FIRM</span><span><i className="legend-dot red" /> KIEZ FIRM</span><span>{game.overtime > 0 ? 'SUDDEN DEATH' : '2 LANES · 2 BRÜCKEN'}</span></div></section>
          <aside className="sidebar right-sidebar"><div className="player-card red-player"><div className="score">{redScore}</div><div className="player-id"><div className="crest red-crest">K</div><div><b>KiezKalle <span className="cpu-badge">KI</span></b><small>Auswärtsblock</small></div></div></div><div className="stat-card"><div className="stat-title">RIVALEN-CLUBHAUS <Heart size={14} /></div><div className="health-value">{Math.ceil(buildingHp.redFortress)} <small>/ 2.400 HP</small></div><div className="health-bar red-health"><i style={{ width: `${buildingHp.redFortress / 24}%` }} /></div></div><div className="combat-log"><div className="stat-title">LIVE-TICKER <Swords size={14} /></div>{game.log.map((entry, i) => <p key={i}>{entry}</p>)}</div></aside>
       </div>
        <div className="bottom-panel"><div className="hype"><div className="hype-label"><Flame size={17} /> HYPE <b>{hype.toFixed(1)}</b><span>/ 10</span></div><div className="hype-bar"><i style={{ width: `${hypePercent}%` }} /></div><small>+{time <= 60 ? '0,95' : '0,48'} / Sekunde</small></div>
           <div className="hand">{myQueue.slice(0, 4).map((id, index) => { const card = cards[id]; return <button title={`${card.name} · ${card.role} · ${card.cost} Hype`} draggable={false} onPointerDown={e => { e.preventDefault(); dragged.current = index; setSelected(index); setDraggingCard(true) }} className={`card ${rarityClass(card)} ${selected === index ? 'selected' : ''} ${hype < card.cost ? 'disabled' : ''}`} key={id} onClick={() => { setSelected(index); setDraggingCard(false) }} aria-label={`${card.name}, ${card.cost} Hype`} aria-pressed={selected === index}><span className="card-cost">{card.cost}</span>{cardArt(card)}<b>{card.name}</b><small>{card.role}</small></button> })}</div>
-          <div className="panel-actions"><div className="next-card-preview" title={`Nächste Karte: ${nextCard.name}`}><div className="next-card-art">{cardArt(nextCard)}</div><div><small>NÄCHSTE KARTE</small><b>{nextCard.icon} {nextCard.name}</b></div></div><button className="icon-button" onClick={() => setShowUnitStates(v => !v)} aria-label={showUnitStates ? 'Einheitenzustände ausblenden' : 'Einheitenzustände anzeigen'} title={showUnitStates ? 'Einheitenzustände ausblenden' : 'Einheitenzustände anzeigen'}>{showUnitStates ? <EyeOff size={18} /> : <Eye size={18} />}</button><button className="surrender" disabled={!!game.result} onClick={() => { setGame(g => ({ ...g, result: 'AUFGEGEBEN' })); setRunning(false) }}><RotateCcw size={15} /> Aufgeben</button></div>
+          <div className="panel-actions"><div className="next-card-preview" title={`Nächste Karte: ${nextCard.name}`}><div className="next-card-art">{cardArt(nextCard)}</div><div><small>NÄCHSTE KARTE</small><b>{nextCard.icon} {nextCard.name}</b></div></div><button className="icon-button" onClick={toggleSound} aria-label={sound ? 'Ton ausschalten' : 'Ton einschalten'} title={sound ? 'Ton ausschalten' : 'Ton einschalten'}>{sound ? <Volume2 size={18} /> : <VolumeX size={18} />}</button><button className="icon-button" onClick={() => setShowUnitStates(v => !v)} aria-label={showUnitStates ? 'Einheitenzustände ausblenden' : 'Einheitenzustände anzeigen'} title={showUnitStates ? 'Einheitenzustände ausblenden' : 'Einheitenzustände anzeigen'}>{showUnitStates ? <EyeOff size={18} /> : <Eye size={18} />}</button><button className="surrender" disabled={!!game.result} onClick={() => { setGame(g => ({ ...g, result: 'AUFGEGEBEN' })); setRunning(false) }}><RotateCcw size={15} /> Aufgeben</button></div>
        </div><footer><span><Trophy size={13} /> Zerstöre das Clubhaus oder führe nach 3 Minuten bei zerstörten Außenposten.</span><span>v0.11 · TRAINING MVP</span></footer>
       {message && <div className="toast" role="status">{message}</div>}
     </section>}
