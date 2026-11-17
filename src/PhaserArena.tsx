@@ -970,7 +970,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
              const point = toScreen(focus.x, focus.y)
              camera.centerOn(point.x, point.y - this.scale.height * .07)
            } else {
-             camera.setZoom(1.12)
+             camera.setZoom(1.08)
              camera.centerOn(this.scale.width / 2, this.scale.height / 2)
            }
            usedSprites.clear()
