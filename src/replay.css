@@ -1,0 +1,3 @@
+.replay-result{font:900 italic clamp(28px,5vw,46px)/.85 'Barlow Condensed',sans-serif;letter-spacing:1px;text-shadow:3px 3px #111b12}
+.replay-result-win{color:#e1e898}
+.replay-result-loss{color:#d98b73}

@@ -12,6 +12,8 @@ type PhaserArenaProps = {
   dragging?: boolean
   perspective?: Side
   showUnitStates?: boolean
+  replayActive?: boolean
+  replayFocus?: { x: number; y: number } | null
   onPlace: (x: number, y: number, drop: boolean) => void
   onReady?: () => void
 }
@@ -43,7 +45,7 @@ function cardColor(card: Card) {
  * state into pixels and owns pointer input, so it can eventually replace the
  * Phaser arena without changing multiplayer or simulation code.
  */
-export function PhaserArena({ game, selectedCard, active, dragging = false, perspective = 'blue', showUnitStates = false, onPlace, onReady }: PhaserArenaProps) {
+export function PhaserArena({ game, selectedCard, active, dragging = false, perspective = 'blue', showUnitStates = false, replayActive = false, replayFocus = null, onPlace, onReady }: PhaserArenaProps) {
   const host = useRef<HTMLDivElement>(null)
   const gameRef = useRef(game)
   const selectedRef = useRef(selectedCard)
@@ -51,6 +53,8 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
   const draggingRef = useRef(dragging)
   const perspectiveRef = useRef(perspective)
   const showUnitStatesRef = useRef(showUnitStates)
+  const replayActiveRef = useRef(replayActive)
+  const replayFocusRef = useRef(replayFocus)
   const onPlaceRef = useRef(onPlace)
   const onReadyRef = useRef(onReady)
 
@@ -60,6 +64,8 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
   draggingRef.current = dragging
   perspectiveRef.current = perspective
   showUnitStatesRef.current = showUnitStates
+  replayActiveRef.current = replayActive
+  replayFocusRef.current = replayFocus
   onPlaceRef.current = onPlace
   onReadyRef.current = onReady
 
@@ -957,6 +963,16 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
         })
 
         scene.renderArena = () => {
+           const camera = this.cameras.main
+           const focus = replayFocusRef.current
+           if (replayActiveRef.current && focus) {
+             camera.setZoom(1.45)
+             const point = toScreen(focus.x, focus.y)
+             camera.centerOn(point.x, point.y - this.scale.height * .07)
+           } else {
+             camera.setZoom(1)
+             camera.centerOn(this.scale.width / 2, this.scale.height / 2)
+           }
            usedSprites.clear()
            usedBuildingHpLabels.clear()
            usedDamageLabels.clear()
@@ -1026,8 +1042,8 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
         parent: host.current,
         width: 800,
         height: 900,
-        backgroundColor: '#18251b',
-        render: { antialias: true, roundPixels: true },
+         backgroundColor: '#18251b',
+         render: { antialias: true, roundPixels: true },
         scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
         scene,
       })

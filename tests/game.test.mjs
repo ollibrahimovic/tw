@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { fromTile, toTile, insideRect, TILE_BUILDINGS, rectCenter, walkablePoint } from '../src/grid.ts'
-import { cards, deploy, newGame, tick, laneRoute, solidBuildings, canDeploy, FLARE_DAMAGE, BEER_FLIGHT, PUDDLE_LIFETIME, TORCH_FLIGHT, FIRE_LIFETIME } from '../src/game.ts'
+import { cards, deploy, newGame, tick, laneRoute, solidBuildings, canDeploy, FLARE_DAMAGE, BEER_FLIGHT, PUDDLE_LIFETIME, TORCH_FLIGHT, FIRE_LIFETIME, SPELL_FLIGHT } from '../src/game.ts'
 
 const fresh = () => newGame(cards.slice(0, 8).map((_, i) => i))
 const ready = game => {
@@ -547,10 +547,13 @@ test('smoke bomb heavily slows and lightly damages enemy troops', () => {
   const enemy = { ...deploy(newGame([0]), 0, 30, 22).units[0], id: 900, side: 'red', x: 70, y: 22, hp: 1000, cooldown: 100 }
   g.units.push(enemy)
   ready(g)
-  const beforeX = enemy.x
   g = tick(g, .5)
+  assert.equal(g.units[0].hp, 1000, 'smoke bomb has no effect before landing')
+  g = tick(g, SPELL_FLIGHT + .05)
   assert.ok(g.units[0].hp < 1000, 'smoke bomb deals light area damage')
-  assert.ok(Math.abs(g.units[0].x - beforeX) < 1.5, 'smoke bomb strongly slows movement')
+  const afterLandingX = g.units[0].x
+  g = tick(g, .5)
+  assert.ok(Math.abs(g.units[0].x - afterLandingX) < 1.5, 'smoke bomb strongly slows movement')
 })
 
 test('beer flies before damaging a unit, leaves a puddle and expires without repeated damage', () => {

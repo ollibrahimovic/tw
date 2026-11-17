@@ -372,13 +372,20 @@ function separateUnits(units: Unit[]) {
         // Once they have a stable combat gap, repeated sideways pushes make a
         // melee unit jitter while chasing a Flitzer.
         if (a.side !== b.side && d > 2.8 && (a.card.name === 'Flitzer' || b.card.name === 'Flitzer') && (a.targetId === b.id || b.targetId === a.id)) continue
-        const side = a.id < b.id ? -1 : 1
-        const nudge = (collisionDistance - d) * (compactCrowd ? .12 : .08)
-        if (!aKeepsRoute && walkablePoint({ x: a.x, y: a.y + side * nudge })) a.y += side * nudge
-        if (!bKeepsRoute && walkablePoint({ x: b.x, y: b.y - side * nudge })) b.y -= side * nudge
-        // Apply separation to the desired course instead of teleporting the
-        // unit sideways. The next movement step performs the correction.
-        const offset = Math.min(compactCrowd ? 1 : 3.8, Math.max(compactCrowd ? .12 : .45, (collisionDistance - d) * (compactCrowd ? .18 : .28)))
+         const side = a.id < b.id ? -1 : 1
+         // Bridge traffic gets one small route correction instead of an
+         // immediate Y move plus a second lateral offset. The old double
+         // correction made units counter-steer on alternating ticks.
+         const bridgePair = inBridgeQueueArea(a) && inBridgeQueueArea(b) &&
+           a.side === b.side && a.lane === b.lane
+         const nudge = (collisionDistance - d) * (compactCrowd ? .12 : .08)
+         if (!bridgePair && !aKeepsRoute && walkablePoint({ x: a.x, y: a.y + side * nudge })) a.y += side * nudge
+         if (!bridgePair && !bKeepsRoute && walkablePoint({ x: b.x, y: b.y - side * nudge })) b.y -= side * nudge
+         const offset = Math.min(
+           compactCrowd ? 1 : bridgePair ? 1.8 : 3.8,
+           Math.max(compactCrowd ? .12 : bridgePair ? .18 : .45,
+             (collisionDistance - d) * (compactCrowd ? .18 : bridgePair ? .16 : .28)),
+         )
         if (!aKeepsRoute) {
           a.lateralOffset = Math.max(-4, Math.min(4, (a.lateralOffset ?? 0) + side * offset))
           a.moving = true
@@ -501,11 +508,11 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
       g.fires.push({ id: spell.id + 1, x: spell.x + 2, y: spell.y + 2, age: 0 })
       g.impacts.push({ id: spell.id, x: spell.x, y: spell.y, age: 0 })
       spell.applied = true
-    } else if (spell.type === 'smoke' && spell.age < spellLifetime('smoke')) {
+    } else if (spell.type === 'smoke' && spell.age >= SPELL_FLIGHT && spell.age < spellLifetime('smoke')) {
       for (const u of g.units) {
           if (u.side !== spell.side && targetableUnit(u) && distance(u, spell) <= SMOKE_RADIUS) { const amount = SMOKE_DAMAGE_PER_SECOND * dt; u.hp -= amount; if (Math.floor(spell.age * 2) !== Math.floor((spell.age - dt) * 2)) recordDamage(g, u, amount * 2, 'area') }
       }
-    } else if (spell.type === 'beer-shower' && spell.age < 2.8) {
+    } else if (spell.type === 'beer-shower' && spell.age >= SPELL_FLIGHT && spell.age < 2.8) {
       for (const u of g.units) {
          if (u.side === spell.side && activeUnit(u) && distance(u, spell) <= 18) { const amount = Math.min(u.card.hp - u.hp, 35 * dt); u.hp += amount; if (amount > 0 && Math.floor(spell.age * 2) !== Math.floor((spell.age - dt) * 2)) recordDamage(g, u, amount * 2, 'heal') }
       }
@@ -585,7 +592,8 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
     if (u.card.name === 'Nachwuchs') u.lane = u.y < 49 ? 0 : 1
     // Steering offsets are temporary course corrections, not permanent lane
     // changes. Let them ease back toward the preferred route every tick.
-    u.lateralOffset = (u.lateralOffset ?? 0) * Math.max(0, 1 - dt * 5)
+     const bridgeTraffic = inBridgeQueueArea(u)
+     u.lateralOffset = (u.lateralOffset ?? 0) * Math.max(0, 1 - dt * (bridgeTraffic ? 2.2 : 5))
     u.cooldown -= dt
     const allies = g.units.filter(v => v.side === u.side && activeUnit(v) && distance(u, v) < 13)
     const marchTank = u.card.name === 'Fanmarsch'
@@ -660,7 +668,9 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
     const inRange = !!pointTarget && distance(u, pointTarget) <= u.card.range +
       (u.card.name === 'Nachwuchs' ? 0 : bridgeTarget ? 2 : beerFenceShot ? 4 : 1)
     const focus = pointTarget ?? siegeBuilding ?? (u.routeIndex >= 2 ? goal : undefined)
-    if (focus) u.facingBack = u.side === 'blue' ? focus.x > u.x : focus.x < u.x
+     // Keep the bridge orientation stable while units make small lateral
+     // corrections. Outside the bridge, target direction can still turn them.
+     if (focus && !bridgeTraffic) u.facingBack = u.side === 'blue' ? focus.x > u.x : focus.x < u.x
     const atBuilding = u.routeIndex >= (goal === pub ? 2 : 4) && distance(u, goal) <= u.card.range + 8
     if (!target && !structureTarget && atBuilding && !u.siegeBuilding) u.siegeBuilding = goal.key
     const onBridge = (() => {
@@ -728,8 +738,8 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
       resolveBuildings(u, solids)
        const waypoint = findPathWaypoint(u, routeWaypoint, solids)
       const d = distance(u, waypoint)
-     const smokeSlowed = g.spells.some(s => s.type === 'smoke' && s.side !== u.side && distance(u, s) < SMOKE_RADIUS)
-     const beerSlowed = g.spells.some(s => s.type === 'beer-shower' && s.side !== u.side && distance(u, s) < 18)
+      const smokeSlowed = g.spells.some(s => s.type === 'smoke' && s.age >= SPELL_FLIGHT && s.side !== u.side && distance(u, s) < SMOKE_RADIUS)
+      const beerSlowed = g.spells.some(s => s.type === 'beer-shower' && s.age >= SPELL_FLIGHT && s.side !== u.side && distance(u, s) < 18)
      const slowed = enemies.some(e => e.card === cards[6] && distance(u, e) < 12) || smokeSlowed || beerSlowed
          let movement = Math.min(d, u.card.speed * MOVEMENT_SPEED_FACTOR * dt * (smokeSlowed ? .24 : slowed ? .5 : 1))
          if (escortTank) {
@@ -767,7 +777,9 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
              u.moveDirection = lateral
                ? `${forward ? 'forward' : 'backward'}-${lateral}` as Unit['moveDirection']
                : forward ? 'forward' : 'backward'
-             u.facingBack = u.side === 'blue' ? dx > .08 : dx < -.08
+              if (Math.abs(dx) > (bridgeTraffic ? .35 : .08)) {
+                u.facingBack = u.side === 'blue' ? dx > .08 : dx < -.08
+              }
            }
        }
         if (!pointTarget && distance(u, routeWaypoint) < .0001) {

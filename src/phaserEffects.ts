@@ -20,6 +20,7 @@ export function createArenaEffects(scene: Phaser.Scene, project: (x: number, y: 
     x: start.x + (end.x - start.x) * t,
     y: start.y + (end.y - start.y) * t - Math.sin(Math.PI * t) * lift,
   })
+  const arcScale = (t: number) => .55 + Math.sin(Math.PI * Math.max(0, Math.min(1, t))) * .7
   const smoke = (p: Point, age: number, seed: number, alpha: number) => {
     air.fillStyle(0xa5a396, alpha).fillCircle(p.x + Math.sin(seed) * age * 8, p.y - age * 24, 2 + age * 7)
   }
@@ -119,38 +120,81 @@ export function createArenaEffects(scene: Phaser.Scene, project: (x: number, y: 
       }
       const age = flare.age + extraAge
       const t = Math.min(1, age / FLARE_FLIGHT)
-      const p = arc(start, end, gatling ? 0 : 41, t)
+      const lift = gatling ? 18 : 41
+      const p = arc(start, end, lift, t)
+      const projectileScale = arcScale(t)
       for (let i = 1; i <= 5; i++) {
         if (t < i * .05) continue
-        smoke(arc(start, end, gatling ? 0 : 41, t - i * .05), i * .08, i, .22 - i * .03)
+        smoke(arc(start, end, lift, t - i * .05), i * .08, i, .22 - i * .03)
       }
       if (gatling) {
-        stroke(arc(start, end, 0, Math.max(0, t - .13)), p, 0xff952c, 3, .7)
-        stroke({ x: p.x - Math.cos(angle) * 7, y: p.y - Math.sin(angle) * 7 }, p, 0xffe0a4, 3)
+        stroke(arc(start, end, lift, Math.max(0, t - .13)), p, 0xff952c, 3 * projectileScale, .7)
+        stroke({ x: p.x - Math.cos(angle) * 7 * projectileScale, y: p.y - Math.sin(angle) * 7 * projectileScale }, p, 0xffe0a4, 3 * projectileScale)
         if (age < .12) {
           air.fillStyle(0xffdb7b, 1 - age / .12).fillCircle(start.x, start.y, 7)
           flame(start, 6, time, flare.id, 1 - age / .12)
         }
-      } else flame(p, 5, time, flare.id)
+      } else flame(p, 5 * projectileScale, time, flare.id)
     }
     for (const spell of game.spells) {
       const target = project(spell.x, spell.y)
       const start = project(spell.fromX, spell.fromY)
       const raw = Math.min(1, (spell.age + extraAge) / SPELL_FLIGHT)
       const flight = 1 - Math.pow(1 - raw, 1.65)
-      const flying = (spell.type === 'signal' || spell.type === 'salvo') && raw < 1
+      const flying = raw < 1
       if (spell.type === 'smoke') {
+        if (flying) {
+          const p = arc(start, target, 54, flight)
+          const size = arcScale(flight)
+          for (let trail = 1; trail <= 4; trail++) {
+            const tail = arc(start, target, 54, Math.max(0, flight - trail * .045))
+            smoke(tail, trail * .08, spell.id + trail, .25 - trail * .035)
+          }
+          air.save().translateCanvas(p.x, p.y).rotateCanvas(flight * 5)
+          air.fillStyle(0x202a26, .95).fillCircle(0, 0, 7 * size)
+          air.fillStyle(0x7b8878, .75).fillCircle(0, -2 * size, 3 * size)
+          air.restore()
+          continue
+        }
         const life = Math.max(0, 1 - spell.age / 7.5)
-        const pulse = 1 + Math.sin(time * 2.5 + spell.id) * .08
-        air.fillStyle(0x111b19, .32 * life).fillEllipse(target.x, target.y + 4, 85 * pulse, 35 * pulse)
-        for (let i = 0; i < 9; i++) {
+        const pulse = 1 + Math.sin(time * 2.5 + spell.id) * .1
+        air.fillStyle(0x0b1412, .52 * life).fillEllipse(target.x, target.y + 5, 112 * pulse, 48 * pulse)
+        air.fillStyle(0x202b27, .3 * life).fillEllipse(target.x, target.y - 2, 86 * pulse, 54 * pulse)
+        for (let i = 0; i < 15; i++) {
           const angle = i * 2.399 + spell.id
           const cloud = {
-            x: target.x + Math.cos(angle) * (30 + (i % 3) * 12) * pulse,
-            y: target.y - 5 + Math.sin(angle) * (14 + (i % 2) * 7) * pulse - (time * 9 + i * 8) % 18,
+            x: target.x + Math.cos(angle) * (34 + (i % 4) * 13) * pulse,
+            y: target.y - 8 + Math.sin(angle) * (18 + (i % 3) * 8) * pulse - (time * 12 + i * 8) % 26,
           }
-          air.fillStyle(i % 2 ? 0x5b655e : 0x788078, (.18 + (i % 3) * .035) * life)
-            .fillCircle(cloud.x, cloud.y, (14 + (i % 4) * 4) * pulse)
+          air.fillStyle(i % 2 ? 0x46534d : 0x69766d, (.24 + (i % 4) * .035) * life)
+            .fillCircle(cloud.x, cloud.y, (16 + (i % 5) * 5) * pulse)
+        }
+        continue
+      }
+      if (spell.type === 'beer-shower') {
+        if (flying) {
+          for (let i = 0; i < 13; i++) {
+            const spread = (i - 6) * 4
+            const from = { x: start.x + spread * .25, y: start.y + (i % 3 - 1) * 5 }
+            const to = { x: target.x + spread, y: target.y + ((i * 7) % 13 - 6) }
+            const cupT = Math.max(0, flight - (i % 4) * .025)
+            const p = arc(from, to, 48 + Math.abs(spread) * .35, cupT)
+            const size = arcScale(cupT) * .75
+            air.save().translateCanvas(p.x, p.y).rotateCanvas(cupT * 5 * (i % 2 ? -1 : 1))
+            air.fillStyle(0xe8e6c9, .95).fillTriangle(-4 * size, -5 * size, 4 * size, -5 * size, 0, 6 * size)
+            air.fillStyle(0xd89b27, 1).fillRect(-2.5 * size, -2 * size, 5 * size, 5 * size)
+            air.fillStyle(0xfff2d7, 1).fillEllipse(0, -5 * size, 9 * size, 3 * size)
+            air.restore()
+          }
+        } else {
+          const life = Math.max(0, 1 - Math.max(0, spell.age - SPELL_FLIGHT) / 1.6)
+          air.fillStyle(0xd39b35, .22 * life).fillEllipse(target.x, target.y + 4, 92, 34)
+          for (let i = 0; i < 13; i++) {
+            const splashT = Math.max(0, Math.min(1, (spell.age - SPELL_FLIGHT) * 1.7 - (i % 4) * .08))
+            const x = target.x + (i - 6) * 7
+            const y = target.y - Math.sin(Math.PI * splashT) * (18 + (i % 3) * 6)
+            air.fillStyle(0xffdf82, (1 - splashT) * .8).fillCircle(x, y, 2.5 * (1 - splashT) + 1)
+          }
         }
         continue
       }

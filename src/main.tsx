@@ -12,8 +12,9 @@ import './app.css'
 import './derby.css'
 import './feedback.css'
 import './menu-overrides.css'
+import './replay.css'
 
-const APP_VERSION = '0.15'
+const APP_VERSION = '0.18'
 const loadingMessages = [
   'Fäuste werden bandagiert',
   'Zahnschutz wird angelegt',
@@ -82,6 +83,10 @@ function App() {
   const [arenaReady, setArenaReady] = useState(false)
   const [loadingActive, setLoadingActive] = useState(false)
   const [loadingStep, setLoadingStep] = useState(0)
+  const [replayActive, setReplayActive] = useState(false)
+  const [replayFocus, setReplayFocus] = useState<{ x: number; y: number } | null>(null)
+  const [replayFrames, setReplayFrames] = useState<Game[]>([])
+  const [replayFrame, setReplayFrame] = useState<Game | null>(null)
   const [onlineMode, setOnlineMode] = useState<'create' | 'join' | 'matchmake' | null>(initialMatch ? 'join' : null)
   const [onlineStatus, setOnlineStatus] = useState<'offline' | 'connecting' | 'waiting' | 'playing'>('offline')
   const [latency, setLatency] = useState<number | null>(null)
@@ -109,7 +114,9 @@ function App() {
   const seenFlareIds = useRef(new Set<number>())
   const seenPuddleIds = useRef(new Set<number>())
   const seenImpactIds = useRef(new Set<number>())
+  const replayHistory = useRef<Game[]>([])
   const hasDrummer = game.units.some(unit => unit.card.name === 'Der Trommler' && (unit.spawnDelay ?? 0) <= 0 && unit.hp > 0)
+  const arenaGame = replayActive && replayFrame ? replayFrame : game
   const previousStructureIds = useRef(new Set<number>())
   const previousBuildingHp = useRef({ ...game.hp })
   const buildingHp = onlineRole === 'blue' ? game.hp : {
@@ -259,12 +266,49 @@ function App() {
     previousBuildingHp.current = { ...game.hp }
   }, [game.spells, game.impacts, game.hp])
   useEffect(() => {
+    if (page !== 'arena' || replayActive || game.result) return
+    const previous = replayHistory.current[replayHistory.current.length - 1]
+    if (previous !== game) replayHistory.current.push(game)
+    if (replayHistory.current.length > 220) replayHistory.current.shift()
+  }, [game, page, replayActive])
+  useEffect(() => {
     if (game.result && game.result !== lastResult.current) {
       const resultClip = game.result === 'DERBYSIEG!' ? 'victory' : 'defeat'
       playClip(resultClip, .8)
+      const decisiveEvent = game.damageEvents[game.damageEvents.length - 1] ?? game.impacts[game.impacts.length - 1]
+      setReplayFocus(decisiveEvent ? { x: decisiveEvent.x, y: decisiveEvent.y } : { x: 50, y: 50 })
+      const frames = replayHistory.current.length > 1
+        ? replayHistory.current.slice(-100)
+        : [game]
+      setReplayFrames(frames)
+      setReplayFrame(frames[0])
+      setReplayActive(frames.length > 1)
+      lastResult.current = game.result
     }
     lastResult.current = game.result
   }, [game.result])
+  useEffect(() => {
+    if (!replayActive || replayFrames.length < 2) return
+    let index = 0
+    const frameInterval = Math.max(20, Math.round(10000 / (replayFrames.length - 1)))
+    const id = window.setInterval(() => {
+      index += 1
+      if (index >= replayFrames.length) {
+        setReplayActive(false)
+        return
+      }
+      setReplayFrame(replayFrames[index])
+    }, frameInterval)
+    return () => window.clearInterval(id)
+  }, [replayActive, replayFrames])
+  function replayDecisiveScene() {
+    const decisiveEvent = game.damageEvents[game.damageEvents.length - 1] ?? game.impacts[game.impacts.length - 1]
+    setReplayFocus(decisiveEvent ? { x: decisiveEvent.x, y: decisiveEvent.y } : { x: 50, y: 50 })
+    const frames = replayHistory.current.length > 1 ? replayHistory.current.slice(-100) : [game]
+    setReplayFrames(frames)
+    setReplayFrame(frames[0])
+    setReplayActive(true)
+  }
   useEffect(() => {
     if (!message) return
     const id = setTimeout(() => setMessage(''), 2200)
@@ -330,6 +374,7 @@ function App() {
     void audio.current.resume()
     primeAudio()
     const freshGame = newGame(deck, deck, true, deck)
+    replayHistory.current = []
     setGame(freshGame)
     seenFlareIds.current.clear()
     seenPuddleIds.current.clear()
@@ -449,6 +494,7 @@ function App() {
     void audio.current.resume()
     primeAudio()
     const freshGame = newGame(deck)
+    replayHistory.current = []
     setOnlineRole('blue')
     seenSpellIds.current.clear()
     seenImpactIds.current.clear()
@@ -543,9 +589,9 @@ function App() {
              <div className="countdown-subtitle">{countdown === 'go' ? 'DAS DERBY LÄUFT' : 'BEREIT MACHEN'}</div>
            </div>}
           <div className="arena-topline"><span><i /> LIVE FROM THE BLOCKS</span><span>HOOL ARENA <b>{blueScore} : {redScore}</b> KIEZ</span><span>{onlineStatus === 'playing' ? `● ONLINE${latency === null ? '' : ` · ${latency} ms`}` : onlineStatus === 'connecting' ? '○ VERBINDET …' : '23:47 · FLUTLICHT'}</span></div>
-              <PhaserArena game={game} selectedCard={selectedCard} dragging={draggingCard} perspective={onlineRole} showUnitStates={showUnitStates} active={running && !game.result} onReady={handleArenaReady} onPlace={(x, y, drop) => { place(x, y, drop ? dragged.current ?? selected : selected); dragged.current = null; setDraggingCard(false) }} />
+              <PhaserArena game={arenaGame} selectedCard={selectedCard} dragging={draggingCard} perspective={onlineRole} showUnitStates={showUnitStates} replayActive={replayActive} replayFocus={replayFocus} active={running && !game.result} onReady={handleArenaReady} onPlace={(x, y, drop) => { place(x, y, drop ? dragged.current ?? selected : selected); dragged.current = null; setDraggingCard(false) }} />
           <div className="arena-bottomline"><span>HOME END <b>↗</b></span><span>BETON. RAUCH. RIVALITÄT.</span><span><b>↙</b> AWAY END</span></div>
-             {!loadingActive && countdown === null && (!running || game.result) && (game.result ? <div className={`match-overlay result-overlay ${game.result === 'DERBYSIEG!' ? 'result-win' : 'result-loss'}`}>
+              {!loadingActive && countdown === null && (!running || game.result) && (replayActive && game.result ? <div className="match-overlay replay-overlay" role="status" aria-live="polite"><div className="replay-card"><div className="replay-kicker">LETZTE 5 SEKUNDEN · 0,5×</div><div className={`replay-result ${game.result === 'DERBYSIEG!' ? 'replay-result-win' : 'replay-result-loss'}`}>{game.result}</div><h2>ZEITLUPE</h2><p>Die entscheidende Schlussphase läuft verlangsamt ab.</p><div className="replay-stats"><div><b>{Math.round(game.totalDamage)}</b><span>Schaden</span></div><div><b>{game.shots}</b><span>Angriffe</span></div><div><b>{blueScore}:{redScore}</b><span>Außenposten</span></div><div><b>{formattedMatchDuration}</b><span>Matchdauer</span></div></div><button className="secondary" onClick={() => setReplayActive(false)}>ERGEBNIS ANZEIGEN</button></div></div> : game.result && !replayActive ? <div className={`match-overlay result-overlay ${game.result === 'DERBYSIEG!' ? 'result-win' : 'result-loss'}`}>
              <div className="result-kicker">{game.result === 'DERBYSIEG!' ? 'DIE KURVE DREHT DURCH' : 'DER BLOCK IST GEFALLEN'}</div>
              <h2>{game.result}</h2>
                <div className="result-scene" aria-label={game.result === 'DERBYSIEG!' ? 'Feiernde Hooligans mit Hool-Arena-Siegesbanner' : 'Geschwächte, verletzte Fans nach der Niederlage'}>
@@ -567,7 +613,7 @@ function App() {
                </svg>
                 {game.result !== 'DERBYSIEG!' && <div className="result-blood-pools"><i /><i /><i /></div>}
              </div>
-               <p>{game.result === 'DERBYSIEG!' ? `Außenposten: ${blueScore} : ${redScore} · ${Math.round(game.totalDamage)} Gesamtschaden · Die Nacht gehört Hool Arena.` : `Außenposten: ${blueScore} : ${redScore} · ${Math.round(game.totalDamage)} Gesamtschaden · Aufstehen, Krone richten.`}</p>
+                 <p>{game.result === 'DERBYSIEG!' ? `Außenposten: ${blueScore} : ${redScore} · ${Math.round(game.totalDamage)} Gesamtschaden · Die Nacht gehört Hool Arena.` : `Außenposten: ${blueScore} : ${redScore} · ${Math.round(game.totalDamage)} Gesamtschaden · Aufstehen, Krone richten.`}</p><button className="secondary replay-button" onClick={replayDecisiveScene}>↻ SZENE NOCHMAL</button>
                 <div className="result-stats" aria-label="Detaillierte Ergebnisstatistik">
                   <div><b>{Math.round(game.totalDamage)}</b><span>Schaden</span></div>
                   <div><b>{game.shots}</b><span>Angriffe</span></div>
