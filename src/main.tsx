@@ -68,6 +68,7 @@ function checkMultiplayerSocket(signal: AbortSignal) {
 
 function App() {
   const [deck, setDeck] = useState(loadDeck)
+  const [replaceSlot, setReplaceSlot] = useState<number | null>(null)
   const preview = new URLSearchParams(window.location.search).get('preview')
   const initialMatch = new URLSearchParams(window.location.search).get('match')
   const [game, setGame] = useState(() => {
@@ -108,6 +109,7 @@ function App() {
   const audioClips = useRef<Record<string, HTMLAudioElement>>({})
   const backgroundMusic = useRef<HTMLAudioElement | null>(null)
   const dragged = useRef<number | null>(null)
+  const deckDragSlot = useRef<number | null>(null)
   const lastShot = useRef(0)
   const lastResult = useRef<string | null>(null)
   const seenSpellIds = useRef(new Set<number>())
@@ -533,7 +535,17 @@ function App() {
     try { localStorage.setItem('terrace-deck', JSON.stringify(next)) } catch { /* In-memory deck remains usable. */ }
   }
   function toggleDeck(id: number) {
-    const next = deck.includes(id) ? deck.filter(cardId => cardId !== id) : deck.length < 8 ? [...deck, id] : deck
+    const next = replaceSlot !== null && !deck.includes(id)
+      ? deck.map((cardId, index) => index === replaceSlot ? id : cardId)
+      : deck.includes(id) ? deck.filter(cardId => cardId !== id) : deck.length < 8 ? [...deck, id] : deck
+    setDeck(next)
+    setReplaceSlot(null)
+    try { localStorage.setItem('terrace-deck', JSON.stringify(next)) } catch { /* In-memory deck remains usable. */ }
+  }
+  function moveDeckSlot(from: number, to: number) {
+    if (from === to || from < 0 || to < 0 || from >= deck.length || to >= deck.length) return
+    const next = [...deck]
+    ;[next[from], next[to]] = [next[to], next[from]]
     setDeck(next)
     try { localStorage.setItem('terrace-deck', JSON.stringify(next)) } catch { /* In-memory deck remains usable. */ }
   }
@@ -552,7 +564,7 @@ function App() {
   return <main className={`app-shell ${page === 'arena' ? 'in-arena' : ''}`}>
     <header className="topbar">
       <div className="brand"><span className="brand-mark">HA</span><span>HOOL <b>ARENA</b></span></div>
-      <nav aria-label="Hauptnavigation">{(['menu', 'arena', 'deck'] as const).map((p, i) => <button key={p} className={page === p ? 'active' : ''} onClick={() => { setPage(p); setRunning(false) }}>{['Hauptmenü', 'Arena', 'Mein Deck'][i]}</button>)}</nav>
+      <nav aria-label="Hauptnavigation">{(['menu', 'deck'] as const).map((p, i) => <button key={p} className={page === p ? 'active' : ''} onClick={() => { setPage(p); setRunning(false) }}>{['Hauptmenü', 'Mein Deck'][i]}</button>)}</nav>
       <button className="icon-button" onClick={toggleSound} aria-label={sound ? 'Ton ausschalten' : 'Ton einschalten'}>{sound ? <Volume2 size={18} /> : <VolumeX size={18} />}</button>
     </header>
     {page === 'menu' && <section className="menu-page">
@@ -568,10 +580,10 @@ function App() {
        <div className="menu-note">Kostenloses Browser-MVP · Training gegen KI · Eigene, fiktive Vereine</div>
        {tutorial && <div className="tutorial-card"><div className="eyebrow">KURZANLEITUNG</div><h2>Dein Derby in drei Zügen</h2><ol><li><b>Karte wählen</b><span>Wähle eine der vier Karten unten.</span></li><li><b>Links platzieren</b><span>Setze Truppen in deiner Hälfte ein; Zauber treffen das ganze Feld.</span></li><li><b>Clubhaus stürmen</b><span>Zerstöre erst die Kneipen und dann das gegnerische Clubhaus.</span></li></ol><button className="secondary" onClick={closeTutorial}>VERSTANDEN</button></div>}
      </section>}
-       {page === 'deck' && <section className="page deck-page"><div className="eyebrow">{onlineMode ? 'MULTIPLAYER · ' : ''}DEINE FIRM · {deck.length}/8 KARTEN</div><h1>{onlineMode === 'join' ? 'Dem Derby beitreten.' : onlineMode === 'create' ? 'Ein Derby eröffnen.' : onlineMode === 'matchmake' ? 'Gegner finden.' : 'Die Startelf? Dein Deck.'}</h1><p>Wähle genau acht Karten. Die ersten vier bilden deine Starthand; gespielte Karten wandern ans Ende.</p><div className="collection">{cards.filter(card => !card.hidden).map(card => { const id = cards.indexOf(card)
+       {page === 'deck' && <section className="page deck-page"><div className="eyebrow">{onlineMode ? 'MULTIPLAYER · ' : ''}DEINE FIRM · {deck.length}/8 KARTEN</div><h1>{onlineMode === 'join' ? 'Dem Derby beitreten.' : onlineMode === 'create' ? 'Ein Derby eröffnen.' : onlineMode === 'matchmake' ? 'Gegner finden.' : 'Die Startelf? Dein Deck.'}</h1><p>Wähle genau acht Karten. Die obere Reihe ist dein fertiges Deck; darunter stellst du es zusammen.</p><div className="deck-slots" aria-label="Deine acht Deckplätze">{Array.from({ length: 8 }, (_, slot) => { const id = deck[slot]; const card = id === undefined ? null : cards[id]; return <div className={`deck-slot ${card ? 'filled' : 'empty'} ${replaceSlot === slot ? 'replace-target' : ''}`} key={slot} draggable={!!card} onDragStart={() => { deckDragSlot.current = slot }} onDragOver={event => event.preventDefault()} onDrop={() => { if (deckDragSlot.current !== null) moveDeckSlot(deckDragSlot.current, slot); deckDragSlot.current = null }} onClick={() => card && setReplaceSlot(slot)} title={card ? 'Ziehen zum Sortieren · Klicken, um diese Karte zu ersetzen' : 'Leeren Deckplatz'}><span className="deck-slot-number">{String(slot + 1).padStart(2, '0')}</span>{card ? <><div className="deck-slot-art">{cardArt(card)}</div><b title={card.name}>{card.name}</b><button className="deck-slot-remove" onClick={event => { event.stopPropagation(); toggleDeck(id) }} aria-label={`${card.name} aus Deckplatz ${slot + 1} entfernen`}>×</button></> : <span className="deck-slot-plus">＋</span>}</div> })}</div><button className="primary deck-start-button" disabled={deck.length !== 8} onClick={start}>{onlineMode === 'join' ? 'DERBY BEITRETEN' : onlineMode === 'create' ? 'EINLADUNG ERSTELLEN' : onlineMode === 'matchmake' ? 'GEGNER SUCHEN' : 'MIT DIESEM DECK SPIELEN'} <Play size={18} /></button><div className="deck-selection-heading"><span>ALLE KARTEN</span><small>{replaceSlot !== null ? `Slot ${replaceSlot + 1} ersetzen · ` : ''}{deck.length}/8 ausgewählt · Klick zum Hinzufügen oder Entfernen</small></div><div className="collection">{cards.filter(card => !card.hidden).map(card => { const id = cards.indexOf(card)
        const selectedInDeck = deck.indexOf(id)
        return <article className={`collection-card ${rarityClass(card)} ${selectedInDeck >= 0 ? 'deck-selected' : ''}`} key={id}><span className="card-cost">{card.cost}</span>{cardArt(card)}<span className={`rarity ${rarityClass(card)}`}>{card.rarity} · {card.cost} Hype</span><h2>{card.name}</h2><p>{card.role}</p><div className="card-stats">{card.hp} HP · {card.damage} Schaden<br />{card.kind === 'building' ? 'Gebäude' : `${card.rate}s Angriff · Tempo ${card.speed}`}</div><button className="secondary" onClick={() => toggleDeck(id)}>{selectedInDeck >= 0 ? `${selectedInDeck + 1} · Entfernen` : '＋ Hinzufügen'}</button>{selectedInDeck >= 0 && <button className="secondary deck-reorder" onClick={() => reorder(selectedInDeck)}>Nach vorne ↑</button>}</article>
-       })}</div><button className="primary" disabled={deck.length !== 8} onClick={start}>{onlineMode === 'join' ? 'DERBY BEITRETEN' : onlineMode === 'create' ? 'EINLADUNG ERSTELLEN' : onlineMode === 'matchmake' ? 'GEGNER SUCHEN' : 'MIT DIESEM DECK SPIELEN'} <Play size={18} /></button></section>}
+        })}</div></section>}
      {page === 'arena' && <section className={`page arena-page ${game.result ? 'showing-result' : ''}`}>
          <div className="mobile-match-timer" aria-label="Verbleibende Spielzeit">{formattedTime}</div>
           <div className="heading-row"><div><div className="eyebrow"><span className="live-dot" /> HOOL ARENA · GEGEN KI</div><h1>Hool Arena</h1><p>Block gegen Block. Nur einer bleibt stehen.</p></div><div className="match-meta"><div><span>{suddenDeath ? 'SUDDEN DEATH' : time <= 60 ? 'FINALE PHASE' : 'HEIMSPIEL'}</span><strong>{suddenDeath ? 'VERLÄNGERUNG' : time <= 60 ? '2× HYPE' : 'HOOL ARENA'}</strong></div><div className={`timer ${time <= 30 ? 'urgent' : ''}`}>{formattedTime}</div><button className="icon-button" disabled={!!game.result || countdown !== null} onClick={() => setRunning(v => !v)} aria-label={running ? 'Pausieren' : 'Fortsetzen'}>{running ? <Pause size={18} /> : <Play size={18} />}</button></div></div>
@@ -629,7 +641,7 @@ function App() {
       </div>
        <div className="bottom-panel"><div className="hype"><div className="hype-label"><Flame size={17} /> HYPE <b>{hype.toFixed(1)}</b><span>/ 10</span></div><div className="hype-bar"><i style={{ width: `${hypePercent}%` }} /></div><small>+{time <= 60 ? '0,95' : '0,48'} / Sekunde</small></div>
           <div className="hand">{myQueue.slice(0, 4).map((id, index) => { const card = cards[id]; return <button title={`${card.name} · ${card.role} · ${card.cost} Hype`} draggable={false} onPointerDown={e => { e.preventDefault(); dragged.current = index; setSelected(index); setDraggingCard(true) }} className={`card ${rarityClass(card)} ${selected === index ? 'selected' : ''} ${hype < card.cost ? 'disabled' : ''}`} key={id} onClick={() => { setSelected(index); setDraggingCard(false) }} aria-label={`${card.name}, ${card.cost} Hype`} aria-pressed={selected === index}><span className="card-cost">{card.cost}</span>{cardArt(card)}<b>{card.name}</b><small>{card.role}</small></button> })}</div>
-          <div className="panel-actions"><div className="next-card-preview" title={`Nächste Karte: ${nextCard.name}`}><div className="next-card-art">{cardArt(nextCard)}</div><div><small>NÄCHSTE KARTE</small><b>{nextCard.icon} {nextCard.name}</b></div></div><button className="icon-button" onClick={toggleSound} aria-label={sound ? 'Ton ausschalten' : 'Ton einschalten'} title={sound ? 'Ton ausschalten' : 'Ton einschalten'}>{sound ? <Volume2 size={18} /> : <VolumeX size={18} />}</button><button className="icon-button" onClick={() => setShowUnitStates(v => !v)} aria-label={showUnitStates ? 'Einheitenzustände ausblenden' : 'Einheitenzustände anzeigen'} title={showUnitStates ? 'Einheitenzustände ausblenden' : 'Einheitenzustände anzeigen'}>{showUnitStates ? <EyeOff size={18} /> : <Eye size={18} />}</button><button className="surrender" disabled={!!game.result} onClick={() => { setGame(g => ({ ...g, result: 'AUFGEGEBEN' })); setRunning(false) }}><RotateCcw size={15} /> Aufgeben</button></div>
+           <div className="panel-actions"><div className="next-card-preview" title={`Nächste Karte: ${nextCard.name}`}><div className="next-card-art">{cardArt(nextCard)}</div><div><small>NÄCHSTE KARTE</small><b>{nextCard.icon} {nextCard.name}</b></div></div><button className="icon-button" onClick={toggleSound} aria-label={sound ? 'Ton ausschalten' : 'Ton einschalten'} title={sound ? 'Ton ausschalten' : 'Ton einschalten'}>{sound ? <Volume2 size={18} /> : <VolumeX size={18} />}</button><button className="icon-button" onClick={() => setShowUnitStates(v => !v)} aria-label={showUnitStates ? 'Einheitenzustände ausblenden' : 'Einheitenzustände anzeigen'} title={showUnitStates ? 'Einheitenzustände ausblenden' : 'Einheitenzustände anzeigen'}>{showUnitStates ? <EyeOff size={18} /> : <Eye size={18} />}</button><button className="surrender" disabled={!!game.result} onClick={() => { if (!window.confirm('Möchtest du das Derby wirklich aufgeben?')) return; setGame(g => ({ ...g, result: 'AUFGEGEBEN' })); setRunning(false) }}><RotateCcw size={15} /> Aufgeben</button></div>
        </div><footer><span><Trophy size={13} /> Zerstöre das Clubhaus oder führe nach 3 Minuten bei zerstörten Außenposten.</span><span>v0.11 · TRAINING MVP</span></footer>
       {message && <div className="toast" role="status">{message}</div>}
     </section>}

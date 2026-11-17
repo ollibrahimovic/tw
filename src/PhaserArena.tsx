@@ -447,6 +447,36 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
 
         }
 
+        const drawBuildingDamage = (building: typeof buildings[number], p: Point, hp: number) => {
+          if (hp <= 0 || hp >= building.max * .82) return
+          const fortress = building.key.includes('Fortress')
+          const heavy = hp < building.max * .38
+          const width = fortress ? 58 : 43
+          const windowY = p.y - (fortress ? 24 : 18)
+          graphics.fillStyle(DARK, heavy ? .78 : .52)
+          graphics.fillRect(p.x - width * .35, windowY, width * .22, 7)
+          graphics.fillRect(p.x + width * .13, windowY + 1, width * .22, 6)
+          if (heavy) {
+            graphics.fillStyle(0x151b17, .72)
+            graphics.fillRect(p.x - width * .48, p.y - 3, width * .96, 5)
+          }
+          graphics.lineStyle(1.5, 0x171d18, heavy ? .9 : .62)
+          graphics.lineBetween(p.x - width * .34, p.y - 2, p.x - width * .18, p.y + 7)
+          graphics.lineBetween(p.x - width * .18, p.y + 7, p.x - width * .25, p.y + 14)
+          graphics.lineBetween(p.x + width * .18, p.y - 4, p.x + width * .08, p.y + 5)
+          if (heavy) {
+            graphics.lineBetween(p.x + width * .08, p.y + 5, p.x + width * .27, p.y + 15)
+            graphics.fillStyle(0x242b24, .82)
+            graphics.fillTriangle(p.x - width * .43, p.y + 10, p.x - width * .28, p.y + 5, p.x - width * .34, p.y + 17)
+            graphics.fillTriangle(p.x + width * .32, p.y + 13, p.x + width * .47, p.y + 6, p.x + width * .42, p.y + 20)
+          }
+          if (heavy) {
+            const smokeX = p.x + Math.sin(animationClock * .002 + building.x) * 4
+            atmosphere.fillStyle(0x8b9684, .13)
+            atmosphere.fillCircle(smokeX, p.y - (fortress ? 58 : 43), 5)
+            atmosphere.fillCircle(smokeX + 5, p.y - (fortress ? 69 : 54), 3.5)
+          }
+        }
         const drawBuilding = (building: typeof buildings[number]) => {
           const hp = gameRef.current.hp[building.key]
           const activated = gameRef.current.hp[`${building.side}PubOne`] <= 0 ||
@@ -460,9 +490,10 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           if (showArt(building.key,
             artKey,
             // Rubble is ground decoration, never part of the actor depth sort.
-            // Ground: 0, rubble: .4, puddles: .5, actors: 1–2, airborne FX: 5.
-            at, false, 1, hp <= 0 ? .4 : 1 + at.y / this.scale.height)) {
-            if (fortressArt && activated && hp > 0) {
+             // Ground: 0, rubble: .4, puddles: .5, actors: 1–2, airborne FX: 5.
+             at, false, 1, hp <= 0 ? .4 : 1 + at.y / this.scale.height)) {
+             drawBuildingDamage(building, at, hp)
+             if (fortressArt && activated && hp > 0) {
               const enemy = shot ?? gameRef.current.units.filter(u => u.side !== building.side && u.hp > 0)
                 .sort((a, b) => Math.hypot(a.x - building.x, a.y - building.y) - Math.hypot(b.x - building.x, b.y - building.y))[0]
               const end = enemy ? toScreen(enemy.x, enemy.y) : { x: at.x, y: at.y + (building.side === perspectiveRef.current ? -100 : 100) }
@@ -474,9 +505,10 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
              healthBar(at, hp, building.max, building.side, 36)
              buildingHpLabel(building.key, at, hp, building.max)
              return
-          }
-          if (hp <= 0) return
-          const p = toScreen(building.x, building.y)
+           }
+           if (hp <= 0) return
+           const p = toScreen(building.x, building.y)
+           drawBuildingDamage(building, p, hp)
           const fortress = building.key.includes('Fortress')
           const width = fortress ? 48 : 36
           const height = fortress ? 34 : 28

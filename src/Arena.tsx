@@ -56,18 +56,27 @@ export function Fan({ card, side = 'blue', fighting = false, moving = false, bac
   const team = side === 'blue' ? '#64c9bd' : '#e9754e'
   const pyro = id === 7 || id === 15
   const sausageSeller = card.name === 'Würstchenverkäufer'
-  const masked = id === 0 || id === 5 || pyro
+  const masked = id === 0 || pyro
+  const shortHair = id === 5
+  const cap = id === 3
+  const yellowCap = id === 6
   const bald = id === 1 || id === 3 || id === 6
   const skin = id === 3 ? '#c59d82' : id === 6 ? '#a9795d' : '#c39170'
   const quote = victory ? ({ 'Der Ultra': 'DURCH!', 'Der Capo': 'ALLE VOR!', 'Würstchenverkäufer': 'WURST!', 'Flitzer': 'HINTERHER!' } as Record<string, string>)[card.name] : undefined
   return <g className={`fan-art fan-${id} ${sausageSeller ? 'fan-sausage-seller' : ''} ${back ? 'fan-back' : ''} ${wounded ? 'fan-wounded' : ''} ${fighting ? 'fan-attacking' : ''} ${victory ? 'fan-victory' : ''} ${moving && !fighting ? 'fan-walking' : ''} fan-walk-${walkDirection}`} stroke="#131817" strokeWidth="2.2" strokeLinejoin="round">
-    {quote && <g className="fan-quote" stroke="none"><path d="M-24-78Q-24-91-11-91H24Q31-91 31-84V-73Q31-66 24-66H-8L-16-61-15-66H-17Q-24-66-24-73Z" fill="#e9dda9" stroke="#26342c" strokeWidth="1.5" /><text x="3" y="-75" textAnchor="middle" fill="#25352b" fontSize="6.5" fontWeight="900">{quote}</text></g>}
-    <ellipse cy="2" rx="18" ry="6" fill="#080d0c" opacity=".5" stroke="none" />
-    <g className="fan-body">
+     {quote && <g className="fan-quote" stroke="none"><path d="M-24-78Q-24-91-11-91H24Q31-91 31-84V-73Q31-66 24-66H-8L-16-61-15-66H-17Q-24-66-24-73Z" fill="#e9dda9" stroke="#26342c" strokeWidth="1.5" /><text x="3" y="-75" textAnchor="middle" fill="#25352b" fontSize="6.5" fontWeight="900">{quote}</text></g>}
+     <ellipse cy="2" rx="18" ry="6" fill="#080d0c" opacity=".5" stroke="none" />
+     {id === 3 && <g className="guard-flag" stroke="#171d19" strokeWidth="1.4" strokeLinejoin="round">
+       <path d="M21-55V4" stroke="#c9b88d" strokeWidth="2.4" />
+       <path d="M22-54Q34-59 46-53L42-43Q32-48 22-44Z" fill={team} />
+       <path d="M24-51Q34-54 42-50" fill="none" stroke="#e7dfc2" strokeWidth="1.5" opacity=".9" />
+     </g>}
+     <g className="fan-body">
       <g className="fan-legs" fill={sausageSeller ? '#315d89' : '#202626'}><path className="leg-left" d="M-9-15-3-14-5 1-8 2-8 5-15 5-14 1Z" /><path className="leg-right" d="M2-14 8-15 11 1 14 2 14 5 7 5 5 1Z" /></g>
       <g className="fan-arms" fill={sausageSeller ? '#c39170' : '#343d3c'}><path className="arm-left" d="M-14-33-23-25-25-16-20-14-14-22-7-27Z" /><path className="arm-right" d="M13-33 22-25 24-16 19-14 13-22 7-27Z" /></g>
       <path d="M-16 3H-5 M6 3H17 M-10-4h5 M7-4h5" stroke="#70786c" strokeWidth="1" />
-      <path d="M-15-35 -6-40 8-40 17-33 17-11 10-8-13-10Z" fill={sausageSeller ? '#315d89' : id === 6 ? '#a59a42' : id === 3 ? '#444c43' : '#273134'} />
+       <path d="M-15-35 -6-40 8-40 17-33 17-11 10-8-13-10Z" fill={sausageSeller ? '#315d89' : id === 6 ? '#e2d36f' : id === 3 ? '#444c43' : '#273134'} />
+       {id === 6 && <g className="folder-vest" stroke="#1d2620" strokeWidth="1.2" strokeLinejoin="round"><path d="M-12-35-5-39 0-34 5-39 13-34 11-11-11-11Z" fill="#eadb7b" /><path d="M0-34V-11 M-10-27H-2 M2-27H10" fill="none" stroke="#7f783e" strokeWidth="1.1" /><path d="M-12-33-16-26 M13-33 17-26" fill="none" stroke="#f0e294" strokeWidth="2" /></g>}
       <path d={`M-13-34 -24-25 -22-17 -16-15 -7-26 ${id === 2 || pyro ? '' : 'M14-33 23-25 22-16 16-16 7-27'}`} fill={id === 3 ? skin : '#343d3c'} />
       <path d={`M-23-20 -17-21 -14-16 -17-12 -23-14Z ${id === 2 || pyro ? '' : 'M17-21 23-21 26-16 22-12 17-15Z'}`} fill={masked ? '#1a2527' : skin} strokeWidth="1.5" />
       <path d="M-22-17h5 M19-17h5" stroke={masked ? '#7c8780' : '#8a5f4b'} strokeWidth="1" />
@@ -82,13 +91,13 @@ export function Fan({ card, side = 'blue', fighting = false, moving = false, bac
        </g>}
       <path d="M-11-30-5-29 M7-31 12-30 M-9-24-6-21 M9-23 12-25" stroke="#c7c6ac" strokeWidth=".8" opacity=".6" />
       {id === 3 && <><path d="M-13-35-7-38-5-12-12-14Z M8-38 14-34 11-14 5-12Z" fill="#191f20" /><path d="M-11-33-8-32 M-10-29-7-28 M9-33 11-32" stroke="#a5a99d" strokeWidth="1.5" /></>}
-       <g className={sausageSeller ? 'sausage-head-base' : masked ? 'balaclava-head' : bald ? 'scarred-head' : 'beanie-head'}>
+        <g className={sausageSeller ? 'sausage-head-base' : masked ? 'balaclava-head' : cap || yellowCap ? 'cap-head' : bald ? 'scarred-head' : shortHair ? 'short-hair-head' : 'beanie-head'}>
         <path d="M-8-35V-29L7-28V-37" fill={skin} />
         <path d="M-12-49Q-13-60 0-61Q14-60 13-49L12-37 6-30-5-31-12-39Z" fill={skin} />
         <path d="M7-56 12-49 10-38 4-32-2-33 5-40Z" fill="#825942" opacity=".45" stroke="none" />
         <path d="M-12-46-15-47-15-40-12-38 M13-46 15-47 15-40 12-38" fill={skin} strokeWidth="1.2" />
         {masked ? <>
-          <path d="M-13-37-14-51Q-14-64 0-64Q15-63 15-51L13-35 7-29-8-30Z" fill={id === 5 ? '#454c42' : '#182226'} />
+           <path d="M-13-37-14-51Q-14-64 0-64Q15-63 15-51L13-35 7-29-8-30Z" fill="#182226" />
           <path d="M-9-56Q0-63 9-55 M0-61 1-50 M-11-38-7-32 M10-39 7-32" fill="none" stroke="#56605c" strokeWidth="1" />
           <path d="M-11-48-3-47 0-45 4-48 12-49 10-41 3-41 0-43-4-41-10-42Z" fill={skin} stroke="#0d171b" strokeWidth="1.5" />
           <path d="M-8-45-4-44 M5-45 9-46" stroke="#e1dbbd" strokeWidth="1.6" />
@@ -97,13 +106,12 @@ export function Fan({ card, side = 'blue', fighting = false, moving = false, bac
           <path d="M-11-39-8-31 M-8-39-5-31" stroke={team} strokeWidth="1.2" />
           {pyro && <path d="M5-58 10-54 M7-59 5-55 M10-56 8-52" stroke="#999b86" strokeWidth=".8" />}
         </> : <>
-          {bald ? <><path d="M-8-54Q-3-60 4-57" stroke="#e8bb98" strokeWidth="2" fill="none" /><path d="M-10-51-8-54 M9-54 11-50" stroke="#8d6d58" strokeWidth="1" /></> : <><path d="M-14-48-13-57Q0-67 13-57L15-49Z" fill={id === 4 ? '#594747' : '#353e34'} /><path d="M-14-51 14-52 14-47-14-46Z" fill="#252d28" /><path d="M-9-57v5 M-4-59v6 M2-60v7 M8-57v4" stroke="#818374" strokeWidth=".8" /></>}
+           {cap || yellowCap ? <><path d="M-14-48Q-12-61 0-64Q13-61 14-48L10-42-9-42Z" fill={yellowCap ? '#e2cf54' : team} /><path d="M-14-48Q0-52 15-47L22-42Q3-38-17-43Z" fill={yellowCap ? '#a38c34' : side === 'blue' ? '#234d79' : '#853f35'} /><path d="M-8-57Q0-62 8-57" fill="none" stroke="#e7dfc2" strokeWidth="1.2" /></> : bald ? <><path d="M-8-54Q-3-60 4-57" stroke="#e8bb98" strokeWidth="2" fill="none" /><path d="M-10-51-8-54 M9-54 11-50" stroke="#8d6d58" strokeWidth="1" /></> : shortHair ? <><path d="M-14-48-13-57Q0-67 13-57L15-48-10-45Z" fill="#15191b" /><path d="M-13-53-8-60 M-7-56-2-63 M0-57 4-63 M6-55 11-60" stroke="#343d3e" strokeWidth="1.4" strokeLinecap="round" /><path d="M-11-47-4-45 M4-45 11-47" stroke="#302822" strokeWidth="2.3" /></> : <><path d="M-14-48-13-57Q0-67 13-57L15-49Z" fill={id === 4 ? '#594747' : '#353e34'} /><path d="M-14-51 14-52 14-47-14-46Z" fill="#252d28" /><path d="M-9-57v5 M-4-59v6 M2-60v7 M8-57v4" stroke="#818374" strokeWidth=".8" /></>}
           <path d="M-9-47-3-45 M4-45 10-48" stroke="#302822" strokeWidth="2.3" />
           <path d="M-8-43h4 M5-43h4" stroke="#e9d9bc" strokeWidth="1.7" />
           <path d="M-6-43h1 M6-43h1" stroke="#262823" strokeWidth="1.8" />
           <path d="M0-44-2-38 2-37 M-5-34 5-35" stroke="#78503d" strokeWidth="1.3" fill="none" />
-          <path d={id === 1 ? 'M7-55 5-48 8-39' : id === 3 ? 'M-10-51-7-43-9-36' : 'M7-42 3-37 7-34'} stroke="#794936" strokeWidth="2" fill="none" />
-          <path d={id === 1 ? 'M7-55 5-48 8-39 M4-52 8-51 M5-43 9-44' : id === 3 ? 'M-10-51-7-43-9-36 M-11-47-6-48 M-11-40-6-41' : 'M7-42 3-37 7-34 M3-40 7-38'} stroke="#e4b59a" strokeWidth=".9" fill="none" />
+           {id !== 6 && <><path d={id === 1 ? 'M7-55 5-48 8-39' : id === 3 ? 'M-10-51-7-43-9-36' : 'M7-42 3-37 7-34'} stroke="#794936" strokeWidth="2" fill="none" /><path d={id === 1 ? 'M7-55 5-48 8-39 M4-52 8-51 M5-43 9-44' : id === 3 ? 'M-10-51-7-43-9-36 M-11-47-6-48 M-11-40-6-41' : 'M7-42 3-37 7-34 M3-40 7-38'} stroke="#e4b59a" strokeWidth=".9" fill="none" /></>}
           {(id === 1 || id === 2 || id === 6) && <path d="M-9-37-6-32 0-30 7-33 10-38 M-6-37v2 M-3-34v2 M2-34v2 M6-37v2" fill="none" stroke="#4c473c" strokeWidth="1.1" />}
           <path d="M-10-29 9-28 8-24-10-25Z" fill={team} strokeWidth="1" />
         </>}
@@ -118,7 +126,7 @@ export function Fan({ card, side = 'blue', fighting = false, moving = false, bac
         <path className="back-cover" d="M-14-35-7-41 8-40 16-33 14-10 4-6-12-12Z" fill={sausageSeller ? '#315d89' : id === 6 ? '#a59a42' : id === 3 ? '#444c43' : '#273134'} />
         <path d="M-10-31-4-35 7-34 12-29" fill="none" stroke={sausageSeller ? '#f4f0dc' : team} strokeWidth="3" opacity=".8" />
         <path d="M-7-29 7-27 M-9-23 9-21 M-8-17 10-15" stroke={sausageSeller ? '#d2c9ad' : '#93958a'} strokeWidth="1" opacity=".55" />
-        <path d={sausageSeller ? 'M-15-50Q0-64 15-50L13-28 7-23-7-23-13-28Z' : 'M-10-51Q0-62 12-51L10-35 0-30-10-36Z'} fill={sausageSeller ? '#33251f' : masked ? '#182226' : id === 4 ? '#594747' : '#353e34'} />
+           <path d={sausageSeller ? 'M-15-50Q0-64 15-50L13-28 7-23-7-23-13-28Z' : 'M-10-51Q0-62 12-51L10-35 0-30-10-36Z'} fill={sausageSeller ? '#33251f' : masked ? '#182226' : cap ? team : yellowCap ? '#b49f3d' : shortHair ? '#15191b' : id === 4 ? '#594747' : '#353e34'} />
         <path d={sausageSeller ? 'M-12-48Q0-56 12-48 M-13-40Q0-48 13-40 M-13-32Q0-40 13-32' : 'M-8-48Q0-55 9-48 M-7-42Q0-47 8-42'} fill="none" stroke={sausageSeller ? '#76513d' : '#818374'} strokeWidth="1.2" />
         {sausageSeller && <path d="M-11-30H11L9-5Q0 1-9-5Z" fill="#f4f0dc" stroke="#b9b39d" strokeWidth="1" />}
         {id === 7 && <path d="M-3-55 3-61 8-55" fill="none" stroke="#999b86" strokeWidth="1.2" />}
@@ -188,8 +196,11 @@ export function Flitzer({ side = 'blue', back = side === 'blue', moving = false 
   const skin = side === 'blue' ? '#c58f72' : '#a97862'
   return <g className={`flitzer-art ${moving ? 'flitzer-walking' : ''}`} stroke="#241b18" strokeWidth="2.2" strokeLinejoin="round">
     <ellipse cy="4" rx="19" ry="6" fill="#080d0c" opacity=".55" stroke="none" />
-    <path className="flitzer-leg-left" d="M-7-13-10 2-14 7-10 10-3 4 0-8" fill="#2b2926" />
-    <path className="flitzer-leg-right" d="M7-13 10 2 14 7 10 10 3 4 0-8" fill="#2b2926" />
+     <path className="flitzer-leg-left" d="M-7-13-10 2-14 7-10 10-3 4 0-8" fill="#d3a07e" />
+     <path className="flitzer-leg-right" d="M7-13 10 2 14 7 10 10 3 4 0-8" fill="#d3a07e" />
+     <path d="M-14 7-10 10-3 4-5 9-12 13-17 11Z" fill="#171b1b" />
+     <path d="M14 7 10 10 3 4 5 9 12 13 17 11Z" fill="#171b1b" />
+     <path d="M-4-10 0 2 4-10 3-3 0 5-3-3Z" fill="#d3a07e" />
     <g className="flitzer-arm-left">
     <path d="M-11-29Q-19-38-24-48L-30-62" fill="none" stroke={skin} strokeWidth="7" strokeLinecap="round" />
     <circle cx="-30" cy="-64" r="4" fill={skin} />
