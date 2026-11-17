@@ -91,6 +91,10 @@ function begin(room) {
 
 function handle(socket, message) {
   if (!message || typeof message.type !== 'string') return
+  if (message.type === 'ping') {
+    if (Number.isFinite(message.sentAt)) send(socket, { type: 'pong', sentAt: message.sentAt })
+    return
+  }
   if (message.type === 'create') {
     if (!validDeck(message.deck)) return send(socket, { type: 'error', message: 'Bitte wähle genau 8 gültige Karten.' })
     const room = { code: code(), players: [{ socket, deck: message.deck }], game: null, timer: null, lastBroadcast: 0 }

@@ -1,5 +1,8 @@
 /* Local SVG coordinates keep every flame attached to its emitter. */
 .pyro-flame{isolation:isolate}
+.sausage-head-base{display:none}
+.fan-sausage-seller.fan-walking .sausage-rage-arm{animation:sausage-rage-swing .55s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:13px -29px}
+@keyframes sausage-rage-swing{from{transform:rotate(-5deg)}to{transform:rotate(7deg)}}
 .fire-tongue,.fire-core,.pyro-aura{transform-origin:0 0}
 .fire-outer{animation:torch-fire .47s ease-in-out infinite alternate}
 .fire-left{animation:torch-left .31s ease-in-out -.17s infinite alternate}

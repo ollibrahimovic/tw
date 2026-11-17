@@ -11,6 +11,58 @@ const ready = game => {
   }
   return game
 }
+test('AI rotates its deck and does not repeat the same card directly', () => {
+  let g = newGame([], [9, 0])
+  g.aiHype = 99
+  const played = []
+  for (let i = 0; i < 4; i++) {
+    g.aiClock = 0
+    g = tick(g, .01)
+    played.push(g.log[0])
+  }
+  assert.deepEqual(played, [
+    'KiezKalle: Leuchtrakete',
+    'KiezKalle: Der Ultra',
+    'KiezKalle: Leuchtrakete',
+    'KiezKalle: Der Ultra',
+  ])
+})
+test('AI does not target a destroyed pub with rockets', () => {
+  let g = newGame([], [9])
+  g.aiHype = 99
+  g.hp.bluePubOne = 0
+  g.aiClock = 0
+  g = tick(g, .01)
+  assert.equal(g.spells.length, 1)
+  assert.notDeepEqual(
+    { x: g.spells[0].x, y: g.spells[0].y },
+    rectCenter(TILE_BUILDINGS.bluePubOne),
+  )
+})
+test('Nachwuchs deploys fifteen tiny fast units with the configured stats', () => {
+  const g = deploy(newGame([21]), 0, 30, 22)
+  assert.equal(g.units.length, 15)
+  assert.ok(g.units.every(unit => unit.card.name === 'Nachwuchs'))
+  assert.ok(g.units.every(unit => unit.hp === 35 && unit.card.damage === 10 && unit.card.speed === 5 && unit.card.range === 1))
+  assert.ok(g.units.every(unit => unit.spawnDelay === 0))
+  assert.equal(new Set(g.units.map(unit => unit.x)).size, 3)
+  assert.equal(new Set(g.units.map(unit => unit.y)).size, 5)
+})
+test('Nachwuchs keeps the lane matching its side of the central route', () => {
+  const g = deploy(newGame([21]), 0, 30, 50)
+  assert.ok(g.units.every(unit => unit.lane === (unit.y < 49 ? 0 : 1)))
+})
+test('spawning units can already be damaged before becoming active', () => {
+  let g = deploy(newGame([21]), 0, 30, 22)
+  g.aiClock = 10000
+  g.units[0].spawnDelay = 1
+  g.spells.push({ id: 900, type: 'signal', side: 'red', x: g.units[0].x, y: g.units[0].y, fromX: 95, fromY: 50, age: 1.8 })
+  const targetId = g.units[0].id
+  const hp = g.units[0].hp
+  g = tick(g, .01)
+  const target = g.units.find(unit => unit.id === targetId)
+  assert.ok(!target || target.hp < hp)
+})
 test('building footprints reject deployment, but allow spells and destroyed buildings', () => {
   const g = fresh()
   assert.equal(canDeploy(g, cards[0], 24, 13), false)
@@ -90,6 +142,26 @@ test('sausage stalls spawn an aggressive vendor when destroyed', () => {
   assert.equal(g.units.length, 1)
   assert.equal(g.units[0].card.name, 'Würstchenverkäufer')
   assert.equal(g.units[0].card.damage, 92)
+})
+test('sausage stalls lose health on their own over time', () => {
+  let g = newGame([18])
+  g.aiClock = 10000
+  g = deploy(g, 0, 30, 31)
+  const hp = g.structures[0].hp
+  g = tick(g, 1)
+  assert.equal(g.structures[0].hp, hp - 30)
+})
+test('sausage sellers leave short-lived sausage drops while moving', () => {
+  let g = newGame([18])
+  g.aiClock = 10000
+  g = deploy(g, 0, 30, 31)
+  g.structures[0].hp = 0
+  g = tick(g, .05)
+  g = tick(g, .2)
+  assert.ok(g.sausages.length > 0)
+  g.units[0].hp = 0
+  for (let i = 0; i < 50; i++) g = tick(g, .05)
+  assert.equal(g.sausages.length, 0)
 })
 test('flitzer ignores enemy units and keeps charging buildings', () => {
   let g = newGame([19])
@@ -333,7 +405,7 @@ test('nearby units spread sideways instead of occupying the same spot', () => {
   g.aiClock = 10000
   g.units.push({ ...g.units[0], id: 900, x: 30, y: 22, side: 'red', hp: 1000 })
   ready(g)
-  g = tick(g, .05)
+  for (let i = 0; i < 20; i++) g = tick(g, .05)
   const a = g.units.find(u => u.id !== 900)
   const b = g.units.find(u => u.id === 900)
   assert.ok(a && b)
@@ -501,6 +573,31 @@ test('beer also impacts buildings and safely lands if a unit target disappears',
   g.beers = [{ id: 999, fromX: 30, fromY: 30, x: 40, y: 40, target: 9999, age: 0, damage: 35 }]
   g = tick(g, BEER_FLIGHT)
   assert.ok(g.puddles.some(p => p.id === 999 && p.x === 40 && p.y === 40))
+})
+
+test('ranged units can target enemies on the bridge', () => {
+  for (const cardIndex of [2, 7]) {
+    let g = deploy(newGame([cardIndex]), 0, 30, 45)
+    g.aiClock = 10000
+    const attacker = g.units[0]
+    Object.assign(attacker, { x: 48, y: 20, routeIndex: 0, cooldown: 0 })
+    g.units.push({ ...attacker, id: 900, side: 'red', x: 52, y: 20, hp: 1000, cooldown: 100, card: { ...cards[0], speed: 0 } })
+    ready(g)
+    g = tick(g, .05)
+    const projectile = cardIndex === 2 ? g.beers[0] : g.torches[0]
+    assert.equal(projectile?.target, 900, `${cards[cardIndex].name} targets a bridge unit`)
+  }
+})
+
+test('beer throwers can throw over the central fence', () => {
+  let g = deploy(newGame([2]), 0, 30, 45)
+  g.aiClock = 10000
+  const attacker = g.units[0]
+  Object.assign(attacker, { x: 45, y: 20, routeIndex: 0, cooldown: 0 })
+  g.units.push({ ...attacker, id: 900, side: 'red', x: 55, y: 20, hp: 1000, cooldown: 100, card: { ...cards[0], speed: 0 } })
+  ready(g)
+  g = tick(g, .05)
+  assert.equal(g.beers[0]?.target, 900)
 })
 
 test('pyro throws before impact, applies enemy-only splash and leaves temporary ground fire', () => {

@@ -1,5 +1,5 @@
 import type Phaser from 'phaser'
-import { buildings, BEER_FLIGHT, TORCH_FLIGHT, FLARE_FLIGHT, FIRE_LIFETIME, PUDDLE_LIFETIME, SPELL_FLIGHT } from './game'
+import { buildings, BEER_FLIGHT, TORCH_FLIGHT, FLARE_FLIGHT, FIRE_LIFETIME, PUDDLE_LIFETIME, SAUSAGE_LIFETIME, SPELL_FLIGHT } from './game'
 import type { Game } from './game'
 
 type Point = { x: number; y: number }
@@ -58,6 +58,16 @@ export function createArenaEffects(scene: Phaser.Scene, project: (x: number, y: 
         flame(at, 4 + (i % 3), time, fire.id + i, fade)
         smoke(at, (time * .65 + i * .23) % 1.4, i, .22 * fade)
       }
+    }
+    for (const sausage of game.sausages) {
+      const fade = Math.max(0, 1 - sausage.age / SAUSAGE_LIFETIME)
+      const p = project(sausage.x, sausage.y)
+      const angle = Math.sin(sausage.id * 2.7) * .55
+      ground.save().translateCanvas(p.x, p.y + 2).rotateCanvas(angle)
+      ground.fillStyle(0x7d2f1f, .85 * fade).fillEllipse(0, 0, 16, 5)
+      ground.fillStyle(0xd56b35, .95 * fade).fillEllipse(0, -1, 12, 3.5)
+      ground.fillStyle(0xf0bd62, .7 * fade).fillCircle(-4, -1, 1)
+      ground.restore()
     }
     for (const beer of game.beers) {
       const start = project(beer.fromX, beer.fromY)
