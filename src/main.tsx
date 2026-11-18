@@ -105,6 +105,10 @@ function App() {
   })
   const [draggingCard, setDraggingCard] = useState(false)
   const socket = useRef<WebSocket | null>(null)
+  const networkTiming = useRef<{ serverTick: number; serverTime: number; clockOffset: number } | null>(null)
+  const networkCurrentSnapshot = useRef<{ game: Game; timing: { serverTick: number; serverTime: number; clockOffset: number } } | null>(null)
+  const networkPreviousSnapshot = useRef<{ game: Game; timing: { serverTick: number; serverTime: number; clockOffset: number } } | null>(null)
+  const lastServerTick = useRef(-1)
   const audio = useRef<AudioContext | null>(null)
   const audioClips = useRef<Record<string, HTMLAudioElement>>({})
   const backgroundMusic = useRef<HTMLAudioElement | null>(null)
@@ -434,7 +438,7 @@ function App() {
     }
     connection.onmessage = event => {
       if (socket.current !== connection || completed) return
-       const message = JSON.parse(event.data) as { type: string; state?: Game; role?: Side; code?: string; invite?: string; waiting?: boolean; message?: string; reason?: string; sentAt?: number }
+       const message = JSON.parse(event.data) as { type: string; state?: Partial<Game>; role?: Side; code?: string; invite?: string; waiting?: boolean; message?: string; reason?: string; sentAt?: number; serverTick?: number; serverTime?: number }
       if (message.type === 'room') {
         waitFor(message.waiting ? 120000 : 15000, message.waiting
           ? 'Innerhalb von zwei Minuten wurde kein Gegner gefunden. Bitte abbrechen und erneut suchen.'
@@ -454,8 +458,19 @@ function App() {
       if (message.type === 'match-start' && message.state) {
         window.clearTimeout(timeout)
         assignedSide = message.role || 'blue'
+        if (Number.isFinite(message.serverTick) && Number.isFinite(message.serverTime)) {
+          lastServerTick.current = message.serverTick as number
+          const timing = {
+            serverTick: message.serverTick as number,
+            serverTime: message.serverTime as number,
+            clockOffset: (message.serverTime as number) - Date.now(),
+          }
+          networkTiming.current = timing
+          networkPreviousSnapshot.current = null
+          networkCurrentSnapshot.current = { game: localResult(message.state as Game), timing }
+        }
         setOnlineRole(message.role || 'blue')
-        setGame(localResult(message.state))
+        setGame(localResult(message.state as Game))
         setOnlineStatus('playing')
         setLoadingStep(0)
         if (arenaReady) {
@@ -467,7 +482,37 @@ function App() {
         }
         return
       }
-      if (message.type === 'state' && message.state) setGame(localResult(message.state))
+       if (message.type === 'state' && message.state) {
+         if (Number.isFinite(message.serverTick) && (message.serverTick as number) <= lastServerTick.current) return
+         if (Number.isFinite(message.serverTick) && Number.isFinite(message.serverTime)) {
+           lastServerTick.current = message.serverTick as number
+           const observedOffset = (message.serverTime as number) - Date.now()
+           const previousOffset = networkTiming.current?.clockOffset ?? observedOffset
+           networkTiming.current = {
+             serverTick: message.serverTick as number,
+             serverTime: message.serverTime as number,
+             clockOffset: previousOffset * .85 + observedOffset * .15,
+           }
+         }
+         const previousGame = networkCurrentSnapshot.current?.game ?? game
+         const nextGame = localResult({
+           ...previousGame,
+           ...message.state,
+           log: message.state.log ?? previousGame.log,
+         } as Game)
+         if (networkTiming.current && Number.isFinite(message.serverTick) && Number.isFinite(message.serverTime)) {
+           const timing = networkTiming.current
+           const nextTiming = {
+             serverTick: message.serverTick as number,
+             serverTime: message.serverTime as number,
+             clockOffset: timing.clockOffset * .85 + ((message.serverTime as number) - Date.now()) * .15,
+           }
+           networkPreviousSnapshot.current = networkCurrentSnapshot.current
+           networkCurrentSnapshot.current = { game: nextGame, timing: nextTiming }
+           networkTiming.current = nextTiming
+         }
+         setGame(nextGame)
+       }
       if (message.type === 'opponent-joined') setOnlineMessage('Gegner ist beigetreten. Derby startet …')
       if (message.type === 'error') fail(message.message || 'Multiplayer-Verbindung fehlgeschlagen.')
       if (message.type === 'room-closed') fail(message.reason || 'Der Gegner hat das Spiel verlassen.')
@@ -601,7 +646,7 @@ function App() {
              <div className="countdown-subtitle">{countdown === 'go' ? 'DAS DERBY LÄUFT' : 'BEREIT MACHEN'}</div>
            </div>}
           <div className="arena-topline"><span><i /> LIVE FROM THE BLOCKS</span><span>HOOL ARENA <b>{blueScore} : {redScore}</b> KIEZ</span><span>{onlineStatus === 'playing' ? `● ONLINE${latency === null ? '' : ` · ${latency} ms`}` : onlineStatus === 'connecting' ? '○ VERBINDET …' : '23:47 · FLUTLICHT'}</span></div>
-              <PhaserArena game={arenaGame} selectedCard={selectedCard} dragging={draggingCard} perspective={onlineRole} showUnitStates={showUnitStates} replayActive={replayActive} replayFocus={replayFocus} active={running && !game.result} onReady={handleArenaReady} onPlace={(x, y, drop) => { place(x, y, drop ? dragged.current ?? selected : selected); dragged.current = null; setDraggingCard(false) }} />
+               <PhaserArena game={arenaGame} selectedCard={selectedCard} dragging={draggingCard} perspective={onlineRole} showUnitStates={showUnitStates} replayActive={replayActive} replayFocus={replayFocus} networkTiming={networkTiming.current} networkPrevious={networkPreviousSnapshot.current} active={running && !game.result} onReady={handleArenaReady} onPlace={(x, y, drop) => { place(x, y, drop ? dragged.current ?? selected : selected); dragged.current = null; setDraggingCard(false) }} />
           <div className="arena-bottomline"><span>HOME END <b>↗</b></span><span>BETON. RAUCH. RIVALITÄT.</span><span><b>↙</b> AWAY END</span></div>
               {!loadingActive && countdown === null && (!running || game.result) && (replayActive && game.result ? <div className="match-overlay replay-overlay" role="status" aria-live="polite"><div className="replay-card"><div className="replay-kicker">LETZTE 5 SEKUNDEN · 0,5×</div><div className={`replay-result ${game.result === 'DERBYSIEG!' ? 'replay-result-win' : 'replay-result-loss'}`}>{game.result}</div><h2>ZEITLUPE</h2><p>Die entscheidende Schlussphase läuft verlangsamt ab.</p><div className="replay-stats"><div><b>{Math.round(game.totalDamage)}</b><span>Schaden</span></div><div><b>{game.shots}</b><span>Angriffe</span></div><div><b>{blueScore}:{redScore}</b><span>Außenposten</span></div><div><b>{formattedMatchDuration}</b><span>Matchdauer</span></div></div><button className="secondary" onClick={() => setReplayActive(false)}>ERGEBNIS ANZEIGEN</button></div></div> : game.result && !replayActive ? <div className={`match-overlay result-overlay ${game.result === 'DERBYSIEG!' ? 'result-win' : 'result-loss'}`}>
              <div className="result-kicker">{game.result === 'DERBYSIEG!' ? 'DIE KURVE DREHT DURCH' : 'DER BLOCK IST GEFALLEN'}</div>

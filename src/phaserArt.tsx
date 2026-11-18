@@ -5,7 +5,7 @@ import { cards } from './game'
 import type { ReactNode } from 'react'
 
 // Rasterized once at load time; gameplay uses GPU textures, not SVG DOM nodes.
-export function loadArenaArt(scene: Phaser.Scene) {
+export function loadArenaArt(scene: Phaser.Scene, requestedCardIndices?: readonly number[]) {
   const walkDirectionForPose = (pose: number) => pose >= 4 && pose < 6 ? 'left'
     : pose >= 6 && pose < 8 ? 'right'
       : pose >= 8 && pose < 10 ? 'forward-left'
@@ -41,12 +41,16 @@ export function loadArenaArt(scene: Phaser.Scene) {
     const bytes = new TextEncoder().encode(svg)
     scene.load.svg(key, `data:image/svg+xml;base64,${btoa(Array.from(bytes, byte => String.fromCharCode(byte)).join(''))}`)
   }
+  const cardIndices = requestedCardIndices
+    ? [...new Set(requestedCardIndices)].filter(index => cards[index] && cards[index].kind !== 'spell' && cards[index].kind !== 'building')
+    : cards.map((_, index) => index).filter(index => cards[index].kind !== 'spell' && cards[index].kind !== 'building')
   for (const side of ['blue', 'red'] as const) {
     for (let aim = 0; aim < 8; aim++) for (const firing of [false, true]) {
       add(`gatling-${side}-${aim}-${firing}`,
         <g transform="scale(1.32)"><GatlingGuard side={side} throwing={firing} aimAngle={aim * 45} /></g>, false)
     }
-    for (const [index, card] of cards.entries()) {
+    for (const index of cardIndices) {
+      const card = cards[index]
       if (card.kind === 'spell' || card.kind === 'building') continue
       for (const back of [false, true]) for (let pose = 0; pose < 12; pose++) {
         add(`fan-${index}-${side}-${back}-${pose}`,

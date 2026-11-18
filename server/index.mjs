@@ -18,9 +18,18 @@ const httpServer = createServer((request, response) => {
   response.writeHead(404)
   response.end('Hool Arena multiplayer server')
 })
-const wss = new WebSocketServer({ server: httpServer })
+const wss = new WebSocketServer({
+  server: httpServer,
+  perMessageDeflate: {
+    threshold: 1024,
+    serverNoContextTakeover: true,
+    clientNoContextTakeover: true,
+  },
+})
 const rooms = new Map()
 const matchmaking = []
+const SIMULATION_STEP_MS = 50
+const MAX_CATCH_UP_STEPS = 5
 
 function code() {
   let value
@@ -37,13 +46,26 @@ function broadcast(room, message) {
   for (const player of room.players) send(player.socket, message)
 }
 
+function broadcastState(room) {
+  const logSignature = `${room.game.log.length}:${room.game.log[room.game.log.length - 1] || ''}`
+  const state = { ...room.game }
+  if (room.lastLogSignature === logSignature) delete state.log
+  else room.lastLogSignature = logSignature
+  broadcast(room, {
+    type: 'state',
+    state,
+    serverTick: room.serverTick,
+    serverTime: room.serverTime || Date.now(),
+  })
+}
+
 function validDeck(deck) {
   return Array.isArray(deck) && deck.length === 8 && new Set(deck).size === 8 &&
     deck.every(id => Number.isInteger(id) && id >= 0 && id < cards.length && !cards[id].hidden)
 }
 
 function closeRoom(room, reason = 'Der Raum wurde geschlossen.') {
-  if (room.timer) clearInterval(room.timer)
+  if (room.timer) clearTimeout(room.timer)
   if (room.startTimer) clearTimeout(room.startTimer)
   rooms.delete(room.code)
   const queueIndex = matchmaking.indexOf(room)
@@ -64,7 +86,7 @@ function queueForMatch(socket, deck) {
     begin(waiting)
     return
   }
-  const room = { code: code(), players: [{ socket, deck }], game: null, timer: null, lastBroadcast: 0 }
+  const room = { code: code(), players: [{ socket, deck }], game: null, timer: null, lastBroadcast: 0, serverTick: 0, lastLogSignature: '' }
   rooms.set(room.code, room)
   matchmaking.push(room)
   socket.room = room
@@ -73,19 +95,35 @@ function queueForMatch(socket, deck) {
 
 function begin(room) {
   room.game = newGame(room.players[0].deck, AI_DECK, true, room.players[1].deck)
-  send(room.players[0].socket, { type: 'match-start', role: 'blue', state: room.game })
-  send(room.players[1].socket, { type: 'match-start', role: 'red', state: room.game })
-  room.lastBroadcast = 0
+  room.serverTick = 0
+  room.serverTime = Date.now()
+  room.lastLogSignature = `${room.game.log.length}:${room.game.log[room.game.log.length - 1] || ''}`
+  send(room.players[0].socket, { type: 'match-start', role: 'blue', state: room.game, serverTick: room.serverTick, serverTime: room.serverTime })
+  send(room.players[1].socket, { type: 'match-start', role: 'red', state: room.game, serverTick: room.serverTick, serverTime: room.serverTime })
   room.startTimer = setTimeout(() => {
-    room.timer = setInterval(() => {
+    let previousTime = performance.now()
+    let accumulator = 0
+    const loop = () => {
       if (!room.game || room.game.result) return
-      room.game = tick(room.game, .05)
-      const now = Date.now()
-      if (now - room.lastBroadcast >= 50) {
-        room.lastBroadcast = now
-        broadcast(room, { type: 'state', state: room.game })
+      const now = performance.now()
+      const elapsed = Math.min(250, Math.max(0, now - previousTime))
+      previousTime = now
+      accumulator += elapsed
+      let steps = 0
+      while (accumulator >= SIMULATION_STEP_MS && steps < MAX_CATCH_UP_STEPS) {
+        room.game = tick(room.game, SIMULATION_STEP_MS / 1000)
+        room.serverTick++
+        room.serverTime = Date.now()
+        accumulator -= SIMULATION_STEP_MS
+        steps++
       }
-    }, 50)
+      // If the process was blocked for too long, discard excess time rather
+      // than simulating an unbounded burst and freezing the server again.
+      if (steps === MAX_CATCH_UP_STEPS && accumulator >= SIMULATION_STEP_MS) accumulator = 0
+      if (steps > 0) broadcastState(room)
+      room.timer = setTimeout(loop, Math.max(0, SIMULATION_STEP_MS - accumulator))
+    }
+    room.timer = setTimeout(loop, SIMULATION_STEP_MS)
   }, 3850)
 }
 
@@ -127,7 +165,7 @@ function handle(socket, message) {
     if (!player || !Number.isInteger(message.slot) || !Number.isFinite(message.x) || !Number.isFinite(message.y)) return
     const side = player === room.players[0] ? 'blue' : 'red'
     room.game = deploy(room.game, message.slot, message.x, message.y, side)
-    broadcast(room, { type: 'state', state: room.game })
+    broadcastState(room)
   }
 }
 
