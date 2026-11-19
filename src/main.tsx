@@ -14,7 +14,7 @@ import './feedback.css'
 import './menu-overrides.css'
 import './replay.css'
 
-const APP_VERSION = '0.24'
+const APP_VERSION = '0.25'
 document.title = 'Terrace Wars — Block gegen Block.'
 const loadingMessages = [
   'Fäuste werden bandagiert',
