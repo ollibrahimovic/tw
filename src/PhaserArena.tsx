@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type PhaserType from 'phaser'
-import { AI_DECK, buildings, canDeploy, cards, cardUnitOffsets, deploymentPoint } from './game'
+import { AI_DECK, CAMPAIGN_PATHS, buildings, canDeploy, cards, cardUnitOffsets, deploymentPoint } from './game'
 import type { Card, Game, Side } from './game'
 import { createArenaEffects } from './phaserEffects'
 import { fromTile, snapToTile, snapBuildingToTile, validTile } from './grid.ts'
@@ -85,11 +85,12 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
 
       const scene = new Phaser.Scene('TerraceWars') as ArenaScene
        scene.preload = function () {
-         const requestedCards = [
-           ...gameRef.current.queue,
-           ...gameRef.current.redQueue,
-           ...AI_DECK,
-         ]
+          const requestedCards = [
+            ...gameRef.current.queue,
+            ...gameRef.current.redQueue,
+            ...AI_DECK,
+            12,
+          ]
          loadArenaArt(this, requestedCards)
        }
       scene.create = function () {
@@ -98,15 +99,18 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
         const sprites = new Map<string, PhaserType.GameObjects.Image>()
         const visualPositions = new Map<number, Point>()
         const usedSprites = new Set<string>()
-        const buildingHpLabels = new Map<string, PhaserType.GameObjects.Text>()
-        const usedBuildingHpLabels = new Set<string>()
+         const buildingHpLabels = new Map<string, PhaserType.GameObjects.Text>()
+         const usedBuildingHpLabels = new Set<string>()
+         const unitLevelLabels = new Map<number, PhaserType.GameObjects.Text>()
+         const usedUnitLevelLabels = new Set<number>()
         const damageLabels = new Map<number, PhaserType.GameObjects.Text>()
         const usedDamageLabels = new Set<number>()
         const bridgeQueueLabels = new Map<number, PhaserType.GameObjects.Text>()
         const usedBridgeQueueLabels = new Set<number>()
         const bars = this.add.graphics().setDepth(10)
         const displaySide = (side: Side): Side => side === perspectiveRef.current ? 'blue' : 'red'
-        const spawnIndicators = this.add.graphics().setDepth(11)
+         const spawnIndicators = this.add.graphics().setDepth(11)
+         const stationIndicators = this.add.graphics().setDepth(10.5)
         const stateIndicators = this.add.graphics().setDepth(12)
         const feedbackIndicators = this.add.graphics().setDepth(8)
         const auraIndicators = this.add.graphics().setDepth(9)
@@ -159,13 +163,27 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
         const buildingHpLabel = (id: string, p: Point, hp: number, max: number) => {
           const label = buildingHpLabels.get(id) ?? this.add.text(0, 0, '').setOrigin(.5).setDepth(12)
           buildingHpLabels.set(id, label)
-          if (hp <= 0 || hp >= max) {
+          const campaignBase = gameRef.current.mode === 'campaign' && id === 'blueFortress'
+          if (hp <= 0 || (!campaignBase && hp >= max)) {
             label.setVisible(false)
             return
           }
           usedBuildingHpLabels.add(id)
-          label.setPosition(p.x, p.y + 30).setText(`${Math.ceil(hp)} HP`).setVisible(true)
+          label.setPosition(p.x, p.y + 30)
+            .setText(campaignBase ? `${Math.ceil(hp)} / 5.000 HP` : `${Math.ceil(hp)} HP`)
+            .setVisible(true)
             .setStyle({ color: '#ded6bc', fontFamily: 'Arial Black, sans-serif', fontSize: '10px', stroke: '#17231b', strokeThickness: 4 })
+        }
+        const unitLevelLabel = (unit: Game['units'][number], p: Point) => {
+          if (gameRef.current.mode !== 'campaign' || unit.side !== 'blue' || !gameRef.current.campaign) return
+          const level = (gameRef.current.campaign.upgrades[unit.card.name] ?? 0) + 1
+          const label = unitLevelLabels.get(unit.id) ?? this.add.text(0, 0, '').setOrigin(.5).setDepth(13)
+          unitLevelLabels.set(unit.id, label)
+          usedUnitLevelLabels.add(unit.id)
+          label.setPosition(p.x, p.y - (unit.card.name === 'Fanmarsch' ? 67 : 37))
+            .setText(`LV ${level}`)
+            .setStyle({ color: '#f0c56b', fontFamily: 'Arial Black, sans-serif', fontSize: '8px', stroke: '#17231b', strokeThickness: 3 })
+            .setVisible(true)
         }
         let hover: Point | null = null
         let pointerDown = false
@@ -310,10 +328,70 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
         }
 
         const drawPitch = () => {
-          activeGraphics = staticGraphics
-          const m = metrics()
-          staticGraphics.fillStyle(0x111a14, 1)
-          staticGraphics.fillRect(0, 0, m.width, m.height)
+           activeGraphics = staticGraphics
+           const m = metrics()
+           staticGraphics.fillStyle(0x111a14, 1)
+           staticGraphics.fillRect(0, 0, m.width, m.height)
+           if (gameRef.current.mode === 'campaign') {
+             staticGraphics.fillStyle(0x263b2a, 1)
+             staticGraphics.fillRoundedRect(m.left, m.top, m.pitchWidth, m.pitchHeight, 10)
+             for (let row = 0; row < 14; row++) {
+               const y = m.top + 18 + row * m.pitchHeight / 14
+               line({ x: m.left, y }, { x: m.left + m.pitchWidth, y }, 0x17271c, 1, .28)
+             }
+             for (let column = 0; column < 10; column++) {
+               const x = m.left + 14 + column * m.pitchWidth / 10
+               line({ x, y: m.top }, { x, y: m.top + m.pitchHeight }, 0x536444, 1, .12)
+             }
+             for (let i = 0; i < 54; i++) {
+               const px = m.left + 12 + ((i * 83) % 991) / 991 * (m.pitchWidth - 24)
+               const py = m.top + 14 + ((i * 137) % 977) / 977 * (m.pitchHeight - 28)
+               staticGraphics.fillStyle(i % 3 ? 0x638052 : 0x9a9664, .18)
+               staticGraphics.fillEllipse(px, py, 5 + (i % 4) * 3, 2 + (i % 3))
+             }
+             for (const path of CAMPAIGN_PATHS) {
+               const points = path.map(point => toScreen(point.x, point.y))
+               for (let i = 1; i < points.length; i++) {
+                 line(points[i - 1], points[i], 0x151d17, 31, .85)
+                 line(points[i - 1], points[i], 0xb29661, 24, .98)
+                 line(points[i - 1], points[i], 0xd2ba7a, 17, .9)
+                 line(points[i - 1], points[i], 0x7e6d4c, 2, .72)
+               }
+               for (let i = 1; i < points.length; i++) {
+                 const a = points[i - 1]
+                 const b = points[i]
+                 const length = Math.hypot(b.x - a.x, b.y - a.y) || 1
+                 for (let distance = 12; distance < length; distance += 26) {
+                   const progress = distance / length
+                   const x = a.x + (b.x - a.x) * progress
+                   const y = a.y + (b.y - a.y) * progress
+                   staticGraphics.fillStyle(0xefe0a6, .35)
+                   staticGraphics.fillCircle(x, y, 1.5)
+                 }
+               }
+             }
+             const routeMarkers = CAMPAIGN_PATHS[0].slice(3, -1).map(point => toScreen(point.x, point.y))
+             for (const point of routeMarkers) {
+               staticGraphics.fillStyle(0xe3cc8c, .75)
+               staticGraphics.fillCircle(point.x, point.y, 3)
+             }
+             const goal = toScreen(buildings.find(building => building.key === 'blueFortress')!.x, buildings.find(building => building.key === 'blueFortress')!.y)
+             staticGraphics.fillStyle(0x17231b, .8)
+             staticGraphics.fillCircle(goal.x, goal.y, 54)
+             staticGraphics.lineStyle(2, 0x9ed0b1, .8)
+             staticGraphics.strokeCircle(goal.x, goal.y, 45)
+             staticGraphics.fillStyle(0x6cc8ae, .18)
+             staticGraphics.fillCircle(goal.x, goal.y, 38)
+             staticGraphics.fillStyle(0xf1e3aa, .82)
+             staticGraphics.fillTriangle(goal.x, goal.y - 27, goal.x + 22, goal.y + 17, goal.x - 22, goal.y + 17)
+             staticGraphics.lineStyle(2, 0x17231b, .85)
+             staticGraphics.lineBetween(goal.x - 13, goal.y + 9, goal.x + 13, goal.y + 9)
+             staticGraphics.lineBetween(goal.x, goal.y - 19, goal.x, goal.y + 13)
+             staticGraphics.lineStyle(2, CREAM, .7)
+             staticGraphics.strokeRoundedRect(m.left, m.top, m.pitchWidth, m.pitchHeight, 10)
+             activeGraphics = dynamicGraphics
+             return
+           }
            staticGraphics.fillStyle(0x465b3d, 1)
            staticGraphics.fillRoundedRect(m.left, m.top, m.pitchWidth, m.pitchHeight, 8)
 
@@ -746,9 +824,12 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
              : 0
            if (showArt(ghost ? ghostId : `unit-${unit.id}`,
             `fan-${index}-${displaySide(unit.side)}-${back}-${pose}`, p, true, ghost ? .48 : 1,
-            ghost ? 9 : 1 + p.y / this.scale.height)) {
-              if (!ghost) healthBar(p, unit.hp, unit.card.hp, unit.side, unit.card.name === 'Nachwuchs' ? 14 : unit.card.name === 'Fanmarsch' ? 30 : 24, unit.card.name === 'Nachwuchs' ? -24 : unit.card.name === 'Fanmarsch' ? -60 : -48)
-             return
+             ghost ? 9 : 1 + p.y / this.scale.height)) {
+               if (!ghost) {
+                 healthBar(p, unit.hp, unit.card.hp, unit.side, unit.card.name === 'Nachwuchs' ? 14 : unit.card.name === 'Fanmarsch' ? 30 : 24, unit.card.name === 'Nachwuchs' ? -24 : unit.card.name === 'Fanmarsch' ? -60 : -48)
+                 unitLevelLabel(unit, p)
+               }
+              return
           }
           const color = displaySide(unit.side) === 'blue' ? BLUE : RED
            const radius = unit.card.name === 'Nachwuchs' ? 4 : unit.card.name === 'Würstchenverkäufer' ? 12 : unit.card.name === 'Fanmarsch' ? 11 : unit.card.name === 'Flitzer' ? 11 : 8
@@ -769,7 +850,8 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           dynamicGraphics.fillRect(p.x - barWidth / 2, p.y + barY, barWidth, 3)
            dynamicGraphics.fillStyle(color, ghost ? .5 : 1)
             dynamicGraphics.fillRect(p.x - barWidth / 2, p.y + barY, barWidth * Math.max(0, unit.hp / unit.card.hp), 3)
-          }
+           if (!ghost) unitLevelLabel(unit, p)
+           }
           const drawStateMarker = (unit: Game['units'][number]) => {
             const colors: Record<string, number> = {
               advance: 0x8fa493,
@@ -808,7 +890,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           auraIndicators.lineStyle(1.2, color, ghost ? .32 : (isDrummer ? .28 * shimmer : .22))
           auraIndicators.strokeCircle(p.x, p.y, screenRadius)
         }
-        const drawSpawnIndicator = (unit: Game['units'][number]) => {
+         const drawSpawnIndicator = (unit: Game['units'][number]) => {
           const remaining = unit.spawnDelay ?? 0
           if (remaining <= 0) return
           const duration = unit.spawnDuration ?? .48
@@ -835,8 +917,28 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
             }
           }
           spawnIndicators.fillStyle(0x101815, .8)
-          spawnIndicators.fillCircle(p.x, p.y, 2.5)
-        }
+           spawnIndicators.fillCircle(p.x, p.y, 2.5)
+         }
+         const drawCampaignStations = () => {
+           stationIndicators.clear()
+           const campaign = gameRef.current.campaign
+           if (!campaign) return
+           for (const station of campaign.stations) {
+             const p = toScreen(station.x, station.y)
+             const occupied = station.unitId !== undefined &&
+               gameRef.current.units.some(unit => unit.id === station.unitId && unit.hp > 0)
+             const pulse = 1 + Math.sin(animationClock * .006 + station.id) * .08
+             stationIndicators.lineStyle(2, occupied ? 0x9da86d : 0xd7e89a, .8)
+             stationIndicators.strokeCircle(p.x, p.y, 15 * pulse)
+             stationIndicators.lineStyle(1, occupied ? 0x9da86d : 0xeaf3c2, .35)
+             stationIndicators.strokeCircle(p.x, p.y, 21 * pulse)
+             stationIndicators.fillStyle(occupied ? 0x5b704f : 0x263b2b, .72)
+             stationIndicators.fillCircle(p.x, p.y, 7)
+             stationIndicators.lineStyle(1.5, occupied ? 0xb9d283 : 0xd7e89a, .75)
+             stationIndicators.lineBetween(p.x - 4, p.y, p.x + 4, p.y)
+             stationIndicators.lineBetween(p.x, p.y - 4, p.x, p.y + 4)
+           }
+         }
 
         const drawEffects = () => {
            const current = gameRef.current
@@ -1075,22 +1177,27 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
              camera.setZoom(1.08)
              camera.centerOn(this.scale.width / 2, this.scale.height / 2)
            }
-           usedSprites.clear()
-           usedBuildingHpLabels.clear()
-           usedDamageLabels.clear()
+            usedSprites.clear()
+            usedBuildingHpLabels.clear()
+            usedUnitLevelLabels.clear()
+            usedDamageLabels.clear()
            usedBridgeQueueLabels.clear()
            bars.clear()
            stateIndicators.clear()
            feedbackIndicators.clear()
            dynamicGraphics.clear()
-           const nextStaticPitchKey = `${this.scale.width}:${this.scale.height}:${perspectiveRef.current}`
+            const nextStaticPitchKey = `${this.scale.width}:${this.scale.height}:${perspectiveRef.current}:${gameRef.current.mode ?? 'arena'}`
            if (staticPitchKey !== nextStaticPitchKey) {
              staticGraphics.clear()
              drawPitch()
              staticPitchKey = nextStaticPitchKey
            }
-           drawAtmosphere()
-          for (const building of buildings) drawBuilding(building)
+            drawAtmosphere()
+           drawCampaignStations()
+           for (const building of buildings) {
+             if (gameRef.current.mode === 'campaign' && building.key !== 'blueFortress') continue
+             drawBuilding(building)
+           }
           for (const structure of gameRef.current.structures) {
             const p = toScreen(structure.x, structure.y)
              showArt(`structure-${structure.id}`,
@@ -1109,7 +1216,13 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
                drawSpawnIndicator(unit)
            }
            drawEffects()
-           for (const [id, label] of buildingHpLabels) if (!usedBuildingHpLabels.has(id)) label.setVisible(false)
+            for (const [id, label] of buildingHpLabels) if (!usedBuildingHpLabels.has(id)) label.setVisible(false)
+            for (const [id, label] of unitLevelLabels) {
+              if (!usedUnitLevelLabels.has(id)) {
+                label.destroy()
+                unitLevelLabels.delete(id)
+              }
+            }
            for (const [id, label] of damageLabels) {
              if (!usedDamageLabels.has(id)) {
                label.destroy()

@@ -3,7 +3,7 @@ import { createServer } from 'node:http'
 import { deploy, newGame, tick, AI_DECK, cards } from '../src/game.ts'
 
 const port = Number(process.env.PORT || 8787)
-const serverVersion = '0.6'
+const serverVersion = '0.7'
 const commit = process.env.RENDER_GIT_COMMIT || null
 const httpServer = createServer((request, response) => {
   if (request.url === '/health') {

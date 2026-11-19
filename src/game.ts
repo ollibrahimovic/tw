@@ -4,7 +4,7 @@ import type { TileRect } from './grid.ts'
 export type Side = 'blue' | 'red'
 export type UnitState = 'advance' | 'bridge' | 'pursue' | 'surround' | 'attack' | 'siege'
 export type MoveDirection = 'forward' | 'backward' | 'left' | 'right' | 'forward-left' | 'forward-right' | 'backward-left' | 'backward-right'
-export type Unit = { id: number; lane: number; x: number; y: number; side: Side; card: Card; hp: number; cooldown: number; routeIndex: number; state: UnitState; moveDirection: MoveDirection; targetId?: number; attackTargetId?: number; goalBuilding?: BuildingKey; preferredPub?: BuildingKey; siegeBuilding?: BuildingKey; siegeStructureId?: number; moving: boolean; facingBack: boolean; lateralOffset?: number; spawnDelay?: number; spawnDuration?: number }
+export type Unit = { id: number; lane: number; x: number; y: number; side: Side; card: Card; hp: number; cooldown: number; routeIndex: number; campaignPath?: number; state: UnitState; moveDirection: MoveDirection; targetId?: number; attackTargetId?: number; goalBuilding?: BuildingKey; preferredPub?: BuildingKey; siegeBuilding?: BuildingKey; siegeStructureId?: number; stationId?: number; moving: boolean; facingBack: boolean; lateralOffset?: number; spawnDelay?: number; spawnDuration?: number }
 export type SausageDrop = { id: number; x: number; y: number; age: number }
 export type Structure = { id: number; x: number; y: number; side: Side; card: Card; hp: number; max: number; cooldown: number; age: number }
 export function laneRoute(side: Side, lane: number) {
@@ -78,6 +78,27 @@ export const cards: Card[] = [
 ]
 export const AI_DECK = [0, 2, 3, 5, 7, 9, 16, 20]
 export type BuildingKey = 'blueFortress' | 'redFortress' | 'bluePubOne' | 'bluePubTwo' | 'redPubOne' | 'redPubTwo'
+export type CampaignStation = { id: number; x: number; y: number; unitId?: number }
+export type CampaignState = { wave: number; waveTotal: number; spawned: number; spawnTimer: number; betweenWaves: number; waveCountdown: number; bossSpawned: boolean; baseHp: number; kills: number; upgrades: Record<string, number>; stations: CampaignStation[] }
+export const CAMPAIGN_PATHS = [
+  [
+    { x: 88, y: 18 }, { x: 72, y: 18 }, { x: 62, y: 28 }, { x: 62, y: 42 },
+    { x: 50, y: 48 }, { x: 38, y: 48 }, { x: 28, y: 38 }, { x: 18, y: 38 }, { x: 9, y: 50 },
+  ],
+  [
+    { x: 88, y: 82 }, { x: 72, y: 82 }, { x: 62, y: 72 }, { x: 62, y: 58 },
+    { x: 50, y: 52 }, { x: 38, y: 52 }, { x: 28, y: 62 }, { x: 18, y: 62 }, { x: 9, y: 50 },
+  ],
+] as const
+export const campaignUpgradeCost = (level: number) => 2 + level * 2
+export function campaignCardStats(card: Card, level = 0): Card {
+  if (level <= 0 || card.kind === 'spell' || card.kind === 'building') return card
+  return {
+    ...card,
+    hp: Math.round(card.hp * (1 + level * .2)),
+    damage: Math.round(card.damage * (1 + level * .15)),
+  }
+}
 export const buildings: { key: BuildingKey; side: Side; x: number; y: number; max: number }[] = [
   { key: 'blueFortress', side: 'blue', ...rectCenter(TILE_BUILDINGS.blueFortress), max: 2400 },
   { key: 'redFortress', side: 'red', ...rectCenter(TILE_BUILDINGS.redFortress), max: 2400 },
@@ -86,9 +107,50 @@ export const buildings: { key: BuildingKey; side: Side; x: number; y: number; ma
   { key: 'redPubOne', side: 'red', ...rectCenter(TILE_BUILDINGS.redPubOne), max: 1200 },
   { key: 'redPubTwo', side: 'red', ...rectCenter(TILE_BUILDINGS.redPubTwo), max: 1200 },
 ]
-export type Game = { time: number; overtime: number; hype: number; redHype: number; aiHype: number; aiClock: number; aiDeck: number[]; aiLastCard?: number; multiplayer: boolean; units: Unit[]; structures: Structure[]; hp: Record<BuildingKey, number>; queue: number[]; redQueue: number[]; id: number; result: string | null; endingCountdown?: number; endingResult?: string; log: string[]; shots: number; totalDamage: number; damageEvents: DamageEvent[]; flares: Flare[]; impacts: { id: number; x: number; y: number; age: number }[]; blood: { id: number; x: number; y: number; age: number }[]; bloodStains: { id: number; x: number; y: number; age: number }[]; spells: Spell[]; buildingCooldown: Record<BuildingKey, number>; buildingTelegraph: Record<BuildingKey, boolean>; beers: Beer[]; puddles: { id: number; x: number; y: number; age: number }[]; torches: Torch[]; fires: { id: number; x: number; y: number; age: number }[]; sausages: SausageDrop[] }
+export type Game = { time: number; overtime: number; hype: number; redHype: number; aiHype: number; aiClock: number; aiDeck: number[]; aiLastCard?: number; multiplayer: boolean; mode?: 'arena' | 'campaign'; campaign?: CampaignState; units: Unit[]; structures: Structure[]; hp: Record<BuildingKey, number>; queue: number[]; redQueue: number[]; id: number; result: string | null; endingCountdown?: number; endingResult?: string; log: string[]; shots: number; totalDamage: number; damageEvents: DamageEvent[]; flares: Flare[]; impacts: { id: number; x: number; y: number; age: number }[]; blood: { id: number; x: number; y: number; age: number }[]; bloodStains: { id: number; x: number; y: number; age: number }[]; spells: Spell[]; buildingCooldown: Record<BuildingKey, number>; buildingTelegraph: Record<BuildingKey, boolean>; beers: Beer[]; puddles: { id: number; x: number; y: number; age: number }[]; torches: Torch[]; fires: { id: number; x: number; y: number; age: number }[]; sausages: SausageDrop[] }
 export function newGame(deck: number[], aiDeck = AI_DECK, multiplayer = false, redDeck = aiDeck): Game {
   return { time: 180, overtime: 0, hype: 7, redHype: 7, aiHype: 7, aiClock: 2, aiDeck: [...aiDeck], aiLastCard: undefined, multiplayer, units: [], structures: [], hp: Object.fromEntries(buildings.map(b => [b.key, b.max])) as Game['hp'], queue: [...deck], redQueue: [...redDeck], id: 1, result: null, log: ['Anpfiff! Jede Lane führt über die gegnerische Kneipe.'], shots: 0, totalDamage: 0, damageEvents: [], flares: [], impacts: [], blood: [], bloodStains: [], spells: [], buildingCooldown: Object.fromEntries(buildings.map(b => [b.key, 0])) as Game['buildingCooldown'], buildingTelegraph: Object.fromEntries(buildings.map(b => [b.key, false])) as Game['buildingTelegraph'], beers: [], puddles: [], torches: [], fires: [], sausages: [] }
+}
+const CAMPAIGN_STATIONS = [
+  { id: 0, ...fromTile({ x: 5, y: 7 }) },
+  { id: 1, ...fromTile({ x: 7, y: 10 }) },
+  { id: 2, ...fromTile({ x: 8, y: 14 }) },
+  { id: 3, ...fromTile({ x: 8, y: 18 }) },
+  { id: 4, ...fromTile({ x: 10, y: 23 }) },
+  { id: 5, ...fromTile({ x: 13, y: 18 }) },
+  { id: 6, ...fromTile({ x: 13, y: 7 }) },
+  { id: 7, ...fromTile({ x: 11, y: 10 }) },
+  { id: 8, ...fromTile({ x: 12, y: 14 }) },
+  { id: 9, ...fromTile({ x: 10, y: 27 }) },
+  { id: 10, ...fromTile({ x: 7, y: 25 }) },
+  { id: 11, ...fromTile({ x: 13, y: 25 }) },
+] satisfies CampaignStation[]
+const campaignWaveTotal = (wave: number) => 5 + Math.min(13, wave * 2)
+export function newCampaignGame(deck: number[], wave = 1, upgrades: Record<string, number> = {}): Game {
+  const base = newGame(deck)
+  const stations = CAMPAIGN_STATIONS.map(station => ({ ...station }))
+  return {
+    ...base,
+    mode: 'campaign',
+    time: 0,
+    hype: 10,
+    redHype: 0,
+    hp: { ...base.hp, blueFortress: 5000, redFortress: 0, redPubOne: 0, redPubTwo: 0 },
+    campaign: {
+      wave,
+      waveTotal: campaignWaveTotal(wave),
+      spawned: 0,
+      spawnTimer: 1.2,
+      betweenWaves: 0,
+      waveCountdown: 60,
+      bossSpawned: false,
+      baseHp: 5000,
+      kills: 0,
+      upgrades: { ...upgrades },
+      stations,
+    },
+    log: [`Welle ${wave} nähert sich. Besetze die Verteidigungsstationen!`],
+  }
 }
 const spellType = (card: Card): Spell['type'] | undefined => ({ 8: 'smoke', 9: 'signal', 10: 'salvo', 11: 'beer-shower' } as Record<number, Spell['type']>)[cards.indexOf(card)]
 export const unitCount = (card: Card) => card.count ?? (cards.indexOf(card) === 14 ? 4 : cards.indexOf(card) === 15 ? 3 : 1)
@@ -139,6 +201,14 @@ const targetableUnit = (unit: Unit) => unit.hp > 0
 export function deploymentPoint(g: Game, card: Card, x: number, y: number, side: Side = 'blue') {
   let point = card.kind === 'building' ? snapBuildingToTile({ x, y }) : snapToTile({ x, y })
   if (card.kind === 'spell') return point
+  if (g.mode === 'campaign' && side === 'blue') {
+    const stations = g.campaign?.stations ?? []
+    const freeStations = stations.filter(station => station.unitId === undefined)
+    const station = (freeStations.length ? freeStations : stations)
+      .slice()
+      .sort((a, b) => (a.x - x) ** 2 + (a.y - y) ** 2 - ((b.x - x) ** 2 + (b.y - y) ** 2))[0]
+    return station ? { x: station.x, y: station.y } : point
+  }
   const tile = toTile(point)
   const enemy = side === 'blue' ? 'red' : 'blue'
   const pub = `${enemy}Pub${tile.x < 9.5 ? 'One' : 'Two'}` as BuildingKey
@@ -177,6 +247,14 @@ export function canDeploy(g: Game, card: Card, x: number, y: number, side: Side 
   if (!validTile(Math.round(tile.x), Math.round(tile.y))) return false
   x = snapped.x
   y = snapped.y
+  if (g.mode === 'campaign') {
+    if (side !== 'blue' || card.kind === 'building') return false
+    if (card.kind !== 'spell') {
+      const station = g.campaign?.stations.find(candidate => Math.abs(candidate.x - x) < .1 && Math.abs(candidate.y - y) < .1)
+      if (!station || station.unitId !== undefined) return false
+    }
+    return true
+  }
   if (card.kind === 'spell') return true
   if (!walkablePoint(snapped) || (tile.y >= 15 && tile.y <= 16)) return false
   const clearance = card.kind === 'building' ? .5 : 0
@@ -201,12 +279,17 @@ export function deploy(g: Game, slot: number, x: number, y: number, side: Side =
   y = snapped.y
   const queueKey = side === 'blue' ? 'queue' : 'redQueue'
   const hypeKey = side === 'blue' ? 'hype' : 'redHype'
+  const campaignPlacement = g.mode === 'campaign' && side === 'blue'
   const queue = [...g[queueKey]]
   const card = cards[queue[slot]]
-  if (g.result || !card || g[hypeKey] < card.cost || !canDeploy(g, card, x, y, side)) return g
+  if (g.result || !card || (campaignPlacement && (g.campaign?.waveCountdown ?? 0) <= 0) ||
+    (!campaignPlacement && g[hypeKey] < card.cost) || !canDeploy(g, card, x, y, side)) return g
   queue.push(queue.splice(slot, 1)[0])
   const type = spellType(card)
-  const update = { ...g, [hypeKey]: g[hypeKey] - card.cost, [queueKey]: queue, id: g.id + 1, log: [`${side === 'blue' ? 'Du' : 'Gegner'}: ${card.name}`, ...g.log].slice(0, 4) }
+  const deployedCard = campaignPlacement
+    ? campaignCardStats(card, g.campaign?.upgrades?.[card.name] ?? 0)
+    : card
+  const update = { ...g, [hypeKey]: campaignPlacement ? g[hypeKey] : g[hypeKey] - card.cost, [queueKey]: queue, id: g.id + 1, log: [`${side === 'blue' ? 'Du' : 'Gegner'}: ${card.name}`, ...g.log].slice(0, 4) }
   if (type) return { ...update, spells: [...g.spells, { id: g.id, type, side, x, y, fromX: side === 'blue' ? 5 : 95, fromY: 50, age: 0 }] }
   if (card.kind === 'building') {
     const structure: Structure = { id: g.id, x, y, side, card, hp: card.hp, max: card.hp, cooldown: 0, age: 0 }
@@ -218,7 +301,11 @@ export function deploy(g: Game, slot: number, x: number, y: number, side: Side =
     }
     return { ...update, structures: [...g.structures, structure] }
   }
-  const units: Unit[] = makeUnits(g.id, x, y, side, y < 49 ? 0 : 1, card)
+  const campaignStation = g.mode === 'campaign' && side === 'blue'
+    ? g.campaign?.stations.find(station => Math.abs(station.x - x) < .1 && Math.abs(station.y - y) < .1)
+    : undefined
+  const units: Unit[] = makeUnits(g.id, x, y, side, y < 49 ? 0 : 1, deployedCard)
+    .map(unit => campaignStation ? { ...unit, stationId: campaignStation.id } : unit)
   const deploymentTile = toTile({ x, y })
   const enemySide = side === 'blue' ? 'red' : 'blue'
   const capturedArea = side === 'blue'
@@ -233,7 +320,12 @@ export function deploy(g: Game, slot: number, x: number, y: number, side: Side =
     if (preferredPub) unit.preferredPub = preferredPub
     if (card.name === 'Nachwuchs') unit.lane = unit.y < 49 ? 0 : 1
   }
-  return { ...update, id: g.id + units.length, units: [...g.units, ...units] }
+  const campaignState = campaignStation && g.campaign
+    ? { ...g.campaign, stations: g.campaign.stations.map(station =>
+      station.id === campaignStation.id ? { ...station, unitId: units[0]?.id } : { ...station },
+    ) }
+    : g.campaign
+  return { ...update, campaign: campaignState, id: g.id + units.length, units: [...g.units, ...units] }
 }
 // Legacy balance values convert at 3.125 units/tile; both axes use the same tile metric.
 const distance = (a: {x: number; y: number}, b: {x: number; y: number}) => tileDistance(a, b) * 100 / 32
@@ -353,6 +445,172 @@ const buildingDamageMultiplier = (g: Game) =>
   g.time <= 0 ? SUDDEN_DEATH_BUILDING_DAMAGE_MULTIPLIER :
     g.time <= 60 ? LATE_BUILDING_DAMAGE_MULTIPLIER : 1
 const spellLifetime = (type: Spell['type']) => type === 'smoke' ? 7.5 : type === 'beer-shower' ? 3.4 : type === 'salvo' ? 2.5 : 1.9
+const campaignEnemyCards = [cards[0], cards[3], cards[5], cards[7], cards[12]]
+function campaignTick(previous: Game, dt: number, random = Math.random): Game {
+  const previousCampaign = previous.campaign!
+  const campaign: CampaignState = {
+    ...previousCampaign,
+    stations: previousCampaign.stations.map(station => ({ ...station })),
+  }
+  const g: Game = {
+    ...previous,
+    time: 0,
+    hp: { ...previous.hp },
+    hype: previous.mode === 'campaign' ? 10 : Math.min(10, previous.hype + dt * .72),
+    units: previous.units.map(unit => ({ ...unit, cooldown: Math.max(0, unit.cooldown - dt), moving: false })),
+    damageEvents: previous.damageEvents.map(event => ({ ...event, age: event.age + dt })).filter(event => event.age < .9),
+    blood: previous.blood.map(event => ({ ...event, age: event.age + dt })).filter(event => event.age < .58),
+    bloodStains: previous.bloodStains.map(event => ({ ...event, age: event.age + dt })).filter(event => event.age < BLOOD_STAIN_LIFETIME),
+    impacts: previous.impacts.map(event => ({ ...event, age: event.age + dt })).filter(event => event.age < .45),
+    spells: previous.spells.map(spell => ({ ...spell, age: spell.age + dt })).filter(spell => spell.age < spellLifetime(spell.type)),
+    flares: [],
+    beers: [],
+    puddles: [],
+    torches: [],
+    fires: [],
+    campaign,
+  }
+  if (campaign.waveCountdown > 0) {
+    campaign.waveCountdown = Math.max(0, campaign.waveCountdown - dt)
+    return g
+  }
+  if (campaign.betweenWaves > 0) {
+    campaign.betweenWaves += dt
+    if (campaign.betweenWaves >= 4) {
+      campaign.wave += 1
+      campaign.waveTotal = campaignWaveTotal(campaign.wave)
+      campaign.spawned = 0
+      campaign.spawnTimer = .8
+      campaign.betweenWaves = 0
+      campaign.waveCountdown = 60
+      campaign.bossSpawned = false
+      g.log = [`Welle ${campaign.wave} beginnt!`, ...g.log].slice(0, 4)
+    }
+  } else if (campaign.spawned < campaign.waveTotal) {
+    campaign.spawnTimer -= dt
+    if (campaign.spawnTimer <= 0) {
+      const lane = random() < .5 ? 0 : 1
+      const card = campaignEnemyCards[(campaign.spawned + campaign.wave - 1) % campaignEnemyCards.length]
+      const spawn = CAMPAIGN_PATHS[lane][0]
+      const enemyCard = {
+        ...card,
+        hp: Math.round(card.hp * Math.min(4, 2.2 + campaign.wave * .16)),
+      }
+      const enemies = makeUnits(g.id, spawn.x, spawn.y, 'red', lane, enemyCard)
+        .map(unit => ({ ...unit, campaignPath: lane, routeIndex: 0, spawnDelay: 0, spawnDuration: 0, facingBack: true }))
+      g.units.push(...enemies)
+      g.id += enemies.length
+      campaign.spawned += 1
+      campaign.spawnTimer = Math.max(.45, 1.45 - campaign.wave * .045)
+    }
+  } else if (!campaign.bossSpawned && !g.units.some(unit => unit.side === 'red' && targetableUnit(unit))) {
+    const lane = random() < .5 ? 0 : 1
+    const path = CAMPAIGN_PATHS[lane]
+    const bossCard = {
+      ...cards[20],
+      hp: 6000 + campaign.wave * 800,
+      damage: 240 + campaign.wave * 20,
+      speed: 1.8,
+    }
+    const boss = makeUnits(g.id, path[0].x, path[0].y, 'red', lane, bossCard)
+      .map(unit => ({ ...unit, campaignPath: lane, routeIndex: 0, spawnDelay: 0, spawnDuration: 0, facingBack: true }))
+    g.units.push(...boss)
+    g.id += boss.length
+    campaign.bossSpawned = true
+    g.log = [`BOSS-WELLE ${campaign.wave}: Der Fanmarsch kommt!`, ...g.log].slice(0, 4)
+  }
+  for (const spell of g.spells) {
+    if (spell.applied || spell.age < .55) continue
+    spell.applied = true
+    const radius = spell.type === 'salvo' ? SALVO_RADIUS : spell.type === 'signal' ? SIGNAL_RADIUS : SMOKE_RADIUS
+    const damage = spell.type === 'salvo' ? cards[10].damage : spell.type === 'signal' ? cards[9].damage : spell.type === 'smoke' ? 90 : 0
+    if (damage > 0) for (const enemy of g.units) {
+      if (enemy.side === 'red' && targetableUnit(enemy) && distance(enemy, spell) <= radius) {
+        enemy.hp -= damage
+        recordDamage(g, enemy, damage, 'area')
+      }
+    }
+  }
+  const defenders = g.units.filter(unit => unit.side === 'blue' && targetableUnit(unit))
+  const attackers = g.units.filter(unit => unit.side === 'red' && targetableUnit(unit))
+  const fortress = buildings.find(building => building.key === 'blueFortress')!
+  const escapedAttackers = new Set<number>()
+  for (const defender of defenders) {
+    const station = campaign.stations.find(candidate => candidate.id === defender.stationId)
+    if (station) {
+      defender.x = station.x
+      defender.y = station.y
+    }
+    const target = attackers
+      .filter(enemy => targetableUnit(enemy) && distance(defender, enemy) <= Math.max(18, defender.card.range * 2.5))
+      .sort((a, b) => distance(defender, a) - distance(defender, b))[0]
+    if (!target || defender.cooldown > 0) continue
+    const damage = defender.card.name === 'Der Capo' ? defender.card.damage * 1.25 : defender.card.damage
+    target.hp -= damage
+    defender.cooldown = defender.card.rate
+    g.shots += 1
+    recordDamage(g, target, damage, defender.card.range > 4 ? 'area' : 'hit')
+    if (defender.card.name === 'Pyro-Fan') {
+      for (const splash of attackers) if (splash !== target && distance(target, splash) <= 9) {
+        splash.hp -= damage * .45
+        recordDamage(g, splash, damage * .45, 'area')
+      }
+    }
+  }
+  for (const attacker of attackers) {
+    const defenderInReach = defenders
+      .filter(defender => targetableUnit(defender) && distance(attacker, defender) <= 7)
+      .sort((a, b) => distance(attacker, a) - distance(attacker, b))[0]
+    if (defenderInReach && attacker.cooldown <= 0) {
+      const marchingDamage = Math.max(6, Math.round(attacker.card.damage * .18))
+      defenderInReach.hp -= marchingDamage
+      attacker.cooldown = attacker.card.rate
+      recordDamage(g, defenderInReach, marchingDamage, 'hit')
+    }
+    const path = CAMPAIGN_PATHS[attacker.campaignPath ?? attacker.lane] ?? CAMPAIGN_PATHS[0]
+    const nextWaypoint = path[Math.min(attacker.routeIndex + 1, path.length - 1)]
+    if (attacker.routeIndex < path.length - 1 && distance(attacker, nextWaypoint) < 2.2) attacker.routeIndex += 1
+    const waypoint = path[Math.min(attacker.routeIndex + 1, path.length - 1)]
+    const dx = waypoint.x - attacker.x
+    const dy = waypoint.y - attacker.y
+    const length = Math.hypot(dx, dy) || 1
+    const step = attacker.card.speed * .55 * dt
+    if (attacker.routeIndex < path.length - 1) {
+      attacker.x += dx / length * step
+      attacker.y += dy / length * step
+      attacker.moving = true
+      attacker.moveDirection = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : 'backward'
+    }
+    if (attacker.routeIndex >= path.length - 1 && distance(attacker, fortress) < 7 && attacker.cooldown <= 0) {
+      const breachMultiplier = attacker.card.name === 'Fanmarsch' ? 7 : 4
+      const damage = Math.max(180, Math.round(attacker.card.damage * breachMultiplier))
+      campaign.baseHp = Math.max(0, campaign.baseHp - damage)
+      g.hp.blueFortress = campaign.baseHp
+      escapedAttackers.add(attacker.id)
+      recordDamage(g, fortress, damage, 'building')
+    }
+  }
+  const before = g.units.length
+  const dead = g.units.filter(unit => unit.hp <= 0)
+  campaign.kills += dead.filter(unit => unit.side === 'red' && !escapedAttackers.has(unit.id)).length
+  for (const unit of dead) g.bloodStains.push({ id: g.id++, x: unit.x, y: unit.y, age: 0 })
+  g.units = g.units.filter(unit => unit.hp > 0 && !escapedAttackers.has(unit.id))
+  if (before !== g.units.length) {
+    for (const station of campaign.stations) {
+      if (!g.units.some(unit => unit.stationId === station.id && unit.hp > 0)) station.unitId = undefined
+    }
+  }
+  if (campaign.baseHp <= 0) {
+    g.result = 'NIEDERLAGE'
+    g.log = ['Das Clubhaus ist gefallen.', ...g.log].slice(0, 4)
+  } else if (campaign.spawned >= campaign.waveTotal && campaign.bossSpawned && !g.units.some(unit => unit.side === 'red')) {
+    if (campaign.betweenWaves <= 0) {
+      campaign.betweenWaves = dt
+      g.log = [`Welle ${campaign.wave} abgewehrt!`, ...g.log].slice(0, 4)
+    }
+  }
+  return g
+}
 function separateUnits(units: Unit[]) {
   // Resolve softly in a few passes so a crowd forms a loose row instead of a stack.
   // Y is the lane width, therefore the preferred escape direction is sideways.
@@ -453,6 +711,7 @@ function surroundWaypoint(u: Unit, target: Unit) {
 }
 export function tick(previous: Game, dt: number, random = Math.random): Game {
   if (previous.result) return previous
+  if (previous.mode === 'campaign' && previous.campaign) return campaignTick(previous, dt, random)
   const g: Game = { ...previous, overtime: previous.time <= 0 ? previous.overtime + dt : 0, hp: { ...previous.hp }, structures: previous.structures.map(s => ({ ...s, cooldown: Math.max(0, s.cooldown - dt), age: s.age + dt })), units: previous.units.map(u => ({ ...u, moving: false, spawnDelay: Math.max(0, (u.spawnDelay ?? 0) - dt) })), log: [...previous.log], buildingCooldown: { ...previous.buildingCooldown }, buildingTelegraph: { ...(previous.buildingTelegraph ?? Object.fromEntries(buildings.map(b => [b.key, false])) as Game['buildingTelegraph']) }, damageEvents: previous.damageEvents.map(e => ({ ...e, age: e.age + dt })).filter(e => e.age < .9), flares: [], impacts: previous.impacts.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < .45), blood: previous.blood.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < .58), bloodStains: previous.bloodStains.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < BLOOD_STAIN_LIFETIME), spells: previous.spells.map(s => ({ ...s, age: s.age + dt })).filter(s => s.age < spellLifetime(s.type)), beers: [], puddles: previous.puddles.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < PUDDLE_LIFETIME), torches: [], fires: previous.fires.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < FIRE_LIFETIME), sausages: (previous.sausages ?? []).map(s => ({ ...s, age: s.age + dt })).filter(s => s.age < SAUSAGE_LIFETIME) }
   if (g.endingCountdown !== undefined) g.endingCountdown -= dt
   for (const old of previous.torches) {
