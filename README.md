@@ -35,6 +35,8 @@ Dieses Repository enthält ein spielbares lokales Trainings-MVP mit:
 - 3-Minuten-Matches, doppelte Hype-Regeneration in der Schlussminute
 - Sieg, Niederlage, Unentschieden, Pause (Leertaste), Aufgeben und Revanche
 - Live-Lebenspunkte und Kampfprotokoll, responsive Oberfläche und zuschaltbare synthetische Soundeffekte
+- Kampagne als Tower-Defense-Modus mit festen Verteidigungsstationen, Hype-basiertem
+  Deck und fortlaufend ansteigenden Gegnerwellen
 
 ## Start
 

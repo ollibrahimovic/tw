@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { fromTile, toTile, insideRect, TILE_BUILDINGS, rectCenter, walkablePoint } from '../src/grid.ts'
-import { cards, deploy, newGame, tick, laneRoute, solidBuildings, canDeploy, FLARE_DAMAGE, BEER_FLIGHT, PUDDLE_LIFETIME, TORCH_FLIGHT, FIRE_LIFETIME, SPELL_FLIGHT } from '../src/game.ts'
+import { cards, deploy, newCampaignGame, newGame, tick, laneRoute, solidBuildings, canDeploy, FLARE_DAMAGE, BEER_FLIGHT, PUDDLE_LIFETIME, TORCH_FLIGHT, FIRE_LIFETIME, SPELL_FLIGHT } from '../src/game.ts'
 
 const fresh = () => newGame(cards.slice(0, 8).map((_, i) => i))
 const ready = game => {
@@ -11,6 +11,75 @@ const ready = game => {
   }
   return game
 }
+test('campaign uses fixed stations and spawns escalating enemy waves', () => {
+  let g = newCampaignGame([0, 0, 0, 0, 0, 0, 0, 0])
+  const station = g.campaign.stations[0]
+  g.hype = 10
+  g = deploy(g, 0, station.x, station.y)
+  assert.equal(g.campaign.stations[0].unitId, g.units[0].id)
+  assert.equal(g.units[0].stationId, station.id)
+  assert.equal(canDeploy(g, cards[0], station.x, station.y), false, 'an occupied station cannot be reused')
+  for (let i = 0; i < 1300; i++) g = tick(g, .05, () => .1)
+  assert.equal(g.mode, 'campaign')
+  assert.ok(g.campaign.spawned > 0, 'the first wave starts spawning')
+  assert.ok(g.units.some(unit => unit.side === 'red'), 'enemy units enter from the far side')
+  assert.ok(g.units.some(unit => unit.side === 'blue' && unit.hp > 0), 'stationary defenders remain in the campaign')
+  assert.ok(g.units.some(unit => {
+    if (unit.side !== 'red') return false
+    const baseCard = cards.find(card => card.name === unit.card.name)
+    return !!baseCard && unit.hp > baseCard.hp
+  }), 'campaign enemies receive extra health')
+  assert.equal(g.hp.redFortress, 0, 'campaign has no opposing clubhouse objective')
+})
+test('campaign starts a high-health boss after the regular wave', () => {
+  let g = newCampaignGame([0, 0, 0, 0, 0, 0, 0, 0])
+  g.campaign.waveCountdown = 0
+  g.campaign.waveTotal = 0
+  g = tick(g, .05, () => .1)
+  const boss = g.units.find(unit => unit.side === 'red')
+  assert.equal(g.campaign.bossSpawned, true)
+  assert.equal(boss?.card.name, 'Fanmarsch')
+  assert.ok((boss?.hp ?? 0) > cards[20].hp * 2, 'the boss has substantially more health')
+})
+test('campaign advances to the next wave after the boss is cleared', () => {
+  let g = newCampaignGame([0, 0, 0, 0, 0, 0, 0, 0])
+  g.campaign.waveCountdown = 0
+  g.campaign.waveTotal = 0
+  g.campaign.bossSpawned = true
+  for (let i = 0; i < 100; i++) g = tick(g, .05, () => .1)
+  assert.equal(g.campaign.wave, 2)
+  assert.ok(g.campaign.waveCountdown > 59 && g.campaign.waveCountdown <= 60)
+})
+test('campaign attackers deal one breach hit and disappear at the clubhouse', () => {
+  let g = newCampaignGame([0, 0, 0, 0, 0, 0, 0, 0])
+  for (let i = 0; i < 2200 && !g.damageEvents.some(event => event.kind === 'building'); i++) {
+    g = tick(g, .05, () => .1)
+  }
+  assert.ok(g.damageEvents.some(event => event.kind === 'building'), 'an attacker reaches the clubhouse')
+  assert.ok(g.units.every(unit => unit.side !== 'red' || unit.x > 12 || Math.abs(unit.y - 50) > 6), 'the breaching attacker disappears after its hit')
+})
+test('campaign attackers damage defenders without stopping their march', () => {
+  let g = newCampaignGame([0, 0, 0, 0, 0, 0, 0, 0])
+  const station = g.campaign.stations[1]
+  g.hype = 10
+  g = deploy(g, 0, station.x, station.y)
+  const defender = g.units[0]
+  const startHp = defender.hp
+  const defenderId = defender.id
+  for (let i = 0; i < 1300 && !g.units.some(unit => unit.side === 'red'); i++) g = tick(g, .05, () => .1)
+  const attacker = g.units.find(unit => unit.side === 'red')
+  assert.ok(attacker, 'a campaign attacker spawned')
+  attacker.x = defender.x
+  attacker.y = defender.y
+  attacker.routeIndex = 0
+  attacker.cooldown = 0
+  const attackerId = attacker.id
+  g = tick(g, .05, () => .1)
+  const nextDefender = g.units.find(unit => unit.id === defenderId)
+  assert.ok(nextDefender && nextDefender.hp < startHp, 'a passing enemy damages a stationed defender')
+  const nextAttacker = g.units.find(unit => unit.id === attackerId)
+  assert.ok(nextAttacker && (nextAttacker.routeIndex > 0 || nextAttacker.x !== defender.x || nextAttacker.y !== defender.y), 'the attacking enemy continues along its route')
+})
 test('AI rotates its deck and does not repeat the same card directly', () => {
   let g = newGame([], [9, 0])
   g.aiHype = 99
