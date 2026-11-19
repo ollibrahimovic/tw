@@ -89,6 +89,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
             ...gameRef.current.queue,
             ...gameRef.current.redQueue,
             ...AI_DECK,
+            1,
             12,
           ]
          loadArenaArt(this, requestedCards)
