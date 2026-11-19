@@ -3,7 +3,7 @@ import { createServer } from 'node:http'
 import { deploy, newGame, tick, AI_DECK, cards } from '../src/game.ts'
 
 const port = Number(process.env.PORT || 8787)
-const serverVersion = '0.5'
+const serverVersion = '0.6'
 const commit = process.env.RENDER_GIT_COMMIT || null
 const httpServer = createServer((request, response) => {
   if (request.url === '/health') {
@@ -16,7 +16,7 @@ const httpServer = createServer((request, response) => {
     return
   }
   response.writeHead(404)
-  response.end('Hool Arena multiplayer server')
+  response.end('Terrace Wars multiplayer server')
 })
 const wss = new WebSocketServer({
   server: httpServer,
@@ -180,5 +180,5 @@ wss.on('connection', socket => {
 })
 
 httpServer.listen(port, '0.0.0.0', () => {
-  console.log(`Hool Arena multiplayer server listening on :${port}`)
+  console.log(`Terrace Wars multiplayer server listening on :${port}`)
 })

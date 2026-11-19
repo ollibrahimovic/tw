@@ -14,7 +14,8 @@ import './feedback.css'
 import './menu-overrides.css'
 import './replay.css'
 
-const APP_VERSION = '0.21'
+const APP_VERSION = '0.22'
+document.title = 'Terrace Wars — Block gegen Block.'
 const loadingMessages = [
   'Fäuste werden bandagiert',
   'Zahnschutz wird angelegt',
@@ -616,7 +617,7 @@ function App() {
   }
   return <main className={`app-shell ${page === 'arena' ? 'in-arena' : ''}`}>
     <header className="topbar">
-      <div className="brand"><span className="brand-mark">HA</span><span>HOOL <b>ARENA</b></span></div>
+      <div className="brand"><span className="brand-mark">TW</span><span>TERRACE <b>WARS</b></span></div>
       <nav aria-label="Hauptnavigation">{(['menu', 'deck'] as const).map((p, i) => <button key={p} className={page === p ? 'active' : ''} onClick={() => { setPage(p); setRunning(false) }}>{['Hauptmenü', 'Mein Deck'][i]}</button>)}</nav>
       <button className="icon-button" onClick={toggleSound} aria-label={sound ? 'Ton ausschalten' : 'Ton einschalten'}>{sound ? <Volume2 size={18} /> : <VolumeX size={18} />}</button>
     </header>
@@ -629,7 +630,7 @@ function App() {
        <div className={`multiplayer-status ${serverStatus}`} role="status"><i /> MULTIPLAYER-SERVER: {serverStatus === 'checking' ? 'WIRD GEPRÜFT' : serverStatus === 'online' ? 'ONLINE' : 'OFFLINE'}</div>
        <div className="app-version">FRONTEND v{APP_VERSION}</div>
        <div className="menu-facts"><span><b>01</b> Karte auswählen</span><span><b>02</b> Hool platzieren</span><span><b>03</b> Clubhaus zerstören</span></div>
-        <div className="menu-crest"><span>EST. 2026</span><strong>HA</strong><Swords size={70} /><b>HOOL ARENA</b><small>BLOCK GEGEN BLOCK.</small></div>
+        <div className="menu-crest"><span>EST. 2026</span><strong>TW</strong><Swords size={70} /><b>TERRACE WARS</b><small>BLOCK GEGEN BLOCK.</small></div>
        <div className="menu-note">Kostenloses Browser-MVP · Training gegen KI · Eigene, fiktive Vereine</div>
        {tutorial && <div className="tutorial-card"><div className="eyebrow">KURZANLEITUNG</div><h2>Dein Derby in drei Zügen</h2><ol><li><b>Karte wählen</b><span>Wähle eine der vier Karten unten.</span></li><li><b>Links platzieren</b><span>Setze Truppen in deiner Hälfte ein; Zauber treffen das ganze Feld.</span></li><li><b>Clubhaus stürmen</b><span>Zerstöre erst die Kneipen und dann das gegnerische Clubhaus.</span></li></ol><button className="secondary" onClick={closeTutorial}>VERSTANDEN</button></div>}
      </section>}
@@ -639,9 +640,9 @@ function App() {
         })}</div></section>}
      {page === 'arena' && <section className={`page arena-page ${game.result ? 'showing-result' : ''}`}>
          <div className="mobile-match-timer" aria-label="Verbleibende Spielzeit">{formattedTime}</div>
-          <div className="heading-row"><div><div className="eyebrow"><span className="live-dot" /> HOOL ARENA · GEGEN KI</div><h1>Hool Arena</h1><p>Block gegen Block. Nur einer bleibt stehen.</p></div><div className="match-meta"><div><span>{suddenDeath ? 'SUDDEN DEATH' : time <= 60 ? 'FINALE PHASE' : 'HEIMSPIEL'}</span><strong>{suddenDeath ? 'VERLÄNGERUNG' : time <= 60 ? '2× HYPE' : 'HOOL ARENA'}</strong></div><div className={`timer ${time <= 30 ? 'urgent' : ''}`}>{formattedTime}</div><button className="icon-button" disabled={!!game.result || countdown !== null} onClick={() => setRunning(v => !v)} aria-label={running ? 'Pausieren' : 'Fortsetzen'}>{running ? <Pause size={18} /> : <Play size={18} />}</button></div></div>
+          <div className="heading-row"><div><div className="eyebrow"><span className="live-dot" /> TERRACE WARS · GEGEN KI</div><h1>Terrace Wars</h1><p>Block gegen Block. Nur einer bleibt stehen.</p></div><div className="match-meta"><div><span>{suddenDeath ? 'SUDDEN DEATH' : time <= 60 ? 'FINALE PHASE' : 'HEIMSPIEL'}</span><strong>{suddenDeath ? 'VERLÄNGERUNG' : time <= 60 ? '2× HYPE' : 'TERRACE WARS'}</strong></div><div className={`timer ${time <= 30 ? 'urgent' : ''}`}>{formattedTime}</div><button className="icon-button" disabled={!!game.result || countdown !== null} onClick={() => setRunning(v => !v)} aria-label={running ? 'Pausieren' : 'Fortsetzen'}>{running ? <Pause size={18} /> : <Play size={18} />}</button></div></div>
        <div className={`game-layout ${game.result ? 'has-result' : ''}`}>
-         <aside className="sidebar left-sidebar"><div className="player-card blue-player"><div className="player-id"><div className="crest blue-crest">HA</div><div><b>Deine Firm</b><small>Hool Arena FC</small></div></div><div className="score">{blueScore}</div></div><div className="stat-card"><div className="stat-title">DEIN CLUBHAUS <Heart size={14} /></div><div className="health-value">{Math.ceil(buildingHp.blueFortress)} <small>/ 2.400 HP</small></div><div className="health-bar"><i style={{ width: `${buildingHp.blueFortress / 24}%` }} /></div><div className="stat-foot"><Shield size={13} /> Heimvorteil</div></div><div className="tip-card"><Zap size={17} /><div><b>Dein Spielzug</b><p>Karte wählen und links platzieren; ab der letzten Spielminute steigt der Gebäudeschaden.</p></div></div></aside>
+         <aside className="sidebar left-sidebar"><div className="player-card blue-player"><div className="player-id"><div className="crest blue-crest">TW</div><div><b>Deine Firm</b><small>Terrace Wars FC</small></div></div><div className="score">{blueScore}</div></div><div className="stat-card"><div className="stat-title">DEIN CLUBHAUS <Heart size={14} /></div><div className="health-value">{Math.ceil(buildingHp.blueFortress)} <small>/ 2.400 HP</small></div><div className="health-bar"><i style={{ width: `${buildingHp.blueFortress / 24}%` }} /></div><div className="stat-foot"><Shield size={13} /> Heimvorteil</div></div><div className="tip-card"><Zap size={17} /><div><b>Dein Spielzug</b><p>Karte wählen und links platzieren; ab der letzten Spielminute steigt der Gebäudeschaden.</p></div></div></aside>
          <section className="arena-wrap"><div className="arena">
              {loadingActive && <div className="countdown-overlay countdown-loading" role="status" aria-live="assertive">
               <div className="countdown-number countdown-loading-number">HOOLIGANS BEREITEN SICH VOR …</div>
@@ -653,14 +654,14 @@ function App() {
               <div className="countdown-number">{countdown === 'go' ? 'SPORT FREI!' : countdown}</div>
              <div className="countdown-subtitle">{countdown === 'go' ? 'DAS DERBY LÄUFT' : 'BEREIT MACHEN'}</div>
            </div>}
-          <div className="arena-topline"><span><i /> LIVE FROM THE BLOCKS</span><span>HOOL ARENA <b>{blueScore} : {redScore}</b> KIEZ</span><span>{onlineStatus === 'playing' ? `● ONLINE${latency === null ? '' : ` · ${latency} ms`}` : onlineStatus === 'connecting' ? '○ VERBINDET …' : '23:47 · FLUTLICHT'}</span></div>
+          <div className="arena-topline"><span><i /> LIVE FROM THE BLOCKS</span><span>TERRACE WARS <b>{blueScore} : {redScore}</b> KIEZ</span><span>{onlineStatus === 'playing' ? `● ONLINE${latency === null ? '' : ` · ${latency} ms`}` : onlineStatus === 'connecting' ? '○ VERBINDET …' : '23:47 · FLUTLICHT'}</span></div>
                <PhaserArena game={arenaGame} selectedCard={selectedCard} dragging={draggingCard} perspective={onlineRole} showUnitStates={showUnitStates} replayActive={replayActive} replayFocus={replayFocus} networkTiming={networkTiming.current} networkPrevious={networkPreviousSnapshot.current} active={running && !game.result} onReady={handleArenaReady} onPlace={(x, y, drop) => { place(x, y, drop ? dragged.current ?? selected : selected); dragged.current = null; setDraggingCard(false) }} />
           <div className="arena-bottomline"><span>HOME END <b>↗</b></span><span>BETON. RAUCH. RIVALITÄT.</span><span><b>↙</b> AWAY END</span></div>
               {!loadingActive && countdown === null && (!running || game.result) && (replayActive && game.result ? <div className="match-overlay replay-overlay" role="status" aria-live="polite"><div className="replay-card"><div className="replay-kicker">LETZTE 5 SEKUNDEN · 0,5×</div><div className={`replay-result ${game.result === 'DERBYSIEG!' ? 'replay-result-win' : 'replay-result-loss'}`}>{game.result}</div><h2>ZEITLUPE</h2><p>Die entscheidende Schlussphase läuft verlangsamt ab.</p><div className="replay-stats"><div><b>{Math.round(game.totalDamage)}</b><span>Schaden</span></div><div><b>{game.shots}</b><span>Angriffe</span></div><div><b>{blueScore}:{redScore}</b><span>Außenposten</span></div><div><b>{formattedMatchDuration}</b><span>Matchdauer</span></div></div><button className="secondary" onClick={() => setReplayActive(false)}>ERGEBNIS ANZEIGEN</button></div></div> : game.result && !replayActive ? <div className={`match-overlay result-overlay ${game.result === 'DERBYSIEG!' ? 'result-win' : 'result-loss'}`}>
              <div className="result-kicker">{game.result === 'DERBYSIEG!' ? 'DIE KURVE DREHT DURCH' : 'DER BLOCK IST GEFALLEN'}</div>
              <h2>{game.result}</h2>
-               <div className="result-scene" aria-label={game.result === 'DERBYSIEG!' ? 'Feiernde Hooligans mit Hool-Arena-Siegesbanner' : 'Geschwächte, verletzte Fans nach der Niederlage'}>
-                 <div className={`result-banner ${game.result === 'DERBYSIEG!' ? 'result-banner-win' : 'result-banner-loss'}`} aria-hidden="true"><span>HOOL ARENA</span><b>{game.result === 'DERBYSIEG!' ? 'DERBYSIEG' : game.result === 'UNENTSCHIEDEN' ? 'KEIN SIEGER' : 'BLOCK GEFALLEN'}</b></div>
+               <div className="result-scene" aria-label={game.result === 'DERBYSIEG!' ? 'Feiernde Hooligans mit Terrace-Wars-Siegesbanner' : 'Geschwächte, verletzte Fans nach der Niederlage'}>
+                 <div className={`result-banner ${game.result === 'DERBYSIEG!' ? 'result-banner-win' : 'result-banner-loss'}`} aria-hidden="true"><span>TERRACE WARS</span><b>{game.result === 'DERBYSIEG!' ? 'DERBYSIEG' : game.result === 'UNENTSCHIEDEN' ? 'KEIN SIEGER' : 'BLOCK GEFALLEN'}</b></div>
                 <svg className="result-fans" viewBox="-100 -75 200 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
                   {game.result === 'DERBYSIEG!' ? <>
                     <g transform="translate(-72 60) scale(.42)"><g className="result-fan result-fan-left"><Fan card={cards[17]} side="blue" victory /></g></g>
@@ -678,7 +679,7 @@ function App() {
                </svg>
                 {game.result !== 'DERBYSIEG!' && <div className="result-blood-pools"><i /><i /><i /></div>}
              </div>
-                 <p>{game.result === 'DERBYSIEG!' ? `Außenposten: ${blueScore} : ${redScore} · ${Math.round(game.totalDamage)} Gesamtschaden · Die Nacht gehört Hool Arena.` : `Außenposten: ${blueScore} : ${redScore} · ${Math.round(game.totalDamage)} Gesamtschaden · Aufstehen, Krone richten.`}</p><button className="secondary replay-button" onClick={replayDecisiveScene}>↻ SZENE NOCHMAL</button>
+                 <p>{game.result === 'DERBYSIEG!' ? `Außenposten: ${blueScore} : ${redScore} · ${Math.round(game.totalDamage)} Gesamtschaden · Die Nacht gehört Terrace Wars.` : `Außenposten: ${blueScore} : ${redScore} · ${Math.round(game.totalDamage)} Gesamtschaden · Aufstehen, Krone richten.`}</p><button className="secondary replay-button" onClick={replayDecisiveScene}>↻ SZENE NOCHMAL</button>
                 <div className="result-stats" aria-label="Detaillierte Ergebnisstatistik">
                   <div><b>{Math.round(game.totalDamage)}</b><span>Schaden</span></div>
                   <div><b>{game.shots}</b><span>Angriffe</span></div>
