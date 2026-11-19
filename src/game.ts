@@ -76,6 +76,7 @@ export const cards: Card[] = [
   { name: 'Fanmarsch', role: 'Geschlossener Gebäudetank mit Banner', cost: 6, icon: '⚑', color: '#7d8f9b', damage: 24, hp: 2600, speed: 1.55, range: 3, rate: 1.4, rarity: 'Legendary' },
   { name: 'Nachwuchs', role: 'Fünfzehn winzige Nachwuchsfans', cost: 3, icon: '✣', color: '#65a9d6', damage: 10, hp: 35, speed: 5, range: 1, rate: .9, rarity: 'Common', count: 15, scale: .44 },
 ]
+export const campaignCards: Card[] = cards.map(card => ({ ...card }))
 export const AI_DECK = [0, 2, 3, 5, 7, 9, 16, 20]
 export type BuildingKey = 'blueFortress' | 'redFortress' | 'bluePubOne' | 'bluePubTwo' | 'redPubOne' | 'redPubTwo'
 export type CampaignStation = { id: number; x: number; y: number; unitId?: number }
@@ -287,7 +288,7 @@ export function deploy(g: Game, slot: number, x: number, y: number, side: Side =
   queue.push(queue.splice(slot, 1)[0])
   const type = spellType(card)
   const deployedCard = campaignPlacement
-    ? campaignCardStats(card, g.campaign?.upgrades?.[card.name] ?? 0)
+    ? campaignCardStats(campaignCards[cards.indexOf(card)] ?? card, g.campaign?.upgrades?.[card.name] ?? 0)
     : card
   const update = { ...g, [hypeKey]: campaignPlacement ? g[hypeKey] : g[hypeKey] - card.cost, [queueKey]: queue, id: g.id + 1, log: [`${side === 'blue' ? 'Du' : 'Gegner'}: ${card.name}`, ...g.log].slice(0, 4) }
   if (type) return { ...update, spells: [...g.spells, { id: g.id, type, side, x, y, fromX: side === 'blue' ? 5 : 95, fromY: 50, age: 0 }] }
@@ -445,7 +446,7 @@ const buildingDamageMultiplier = (g: Game) =>
   g.time <= 0 ? SUDDEN_DEATH_BUILDING_DAMAGE_MULTIPLIER :
     g.time <= 60 ? LATE_BUILDING_DAMAGE_MULTIPLIER : 1
 const spellLifetime = (type: Spell['type']) => type === 'smoke' ? 7.5 : type === 'beer-shower' ? 3.4 : type === 'salvo' ? 2.5 : 1.9
-const campaignEnemyCards = [cards[0], cards[3], cards[5], cards[7], cards[12]]
+const campaignEnemyCards = [campaignCards[0], campaignCards[3], campaignCards[5], campaignCards[7], campaignCards[12]]
 function campaignTick(previous: Game, dt: number, random = Math.random): Game {
   const previousCampaign = previous.campaign!
   const campaign: CampaignState = {
@@ -507,7 +508,7 @@ function campaignTick(previous: Game, dt: number, random = Math.random): Game {
     const lane = random() < .5 ? 0 : 1
     const path = CAMPAIGN_PATHS[lane]
     const bossCard = {
-      ...cards[20],
+      ...campaignCards[20],
       hp: 6000 + campaign.wave * 800,
       damage: 240 + campaign.wave * 20,
       speed: 1.8,
