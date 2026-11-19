@@ -2,7 +2,7 @@
 :root{color-scheme:dark}
 body{background:#111612;color:#dfdccb}
 .deck-page{overflow:visible!important}
-body{overflow-x:clip}
+body{overflow:visible!important}
 .app-shell{background:radial-gradient(ellipse at 75% 12%,#30342655,transparent 48%),repeating-linear-gradient(112deg,#ffffff02 0 1px,transparent 1px 7px),#111612}
 .topbar{background:#111612e8;border-bottom:1px solid #414535;box-shadow:none}
 .brand{font-style:italic;letter-spacing:1px}.brand b{color:#d2df80}.brand-mark{background:#d2df80;color:#1a241b;box-shadow:3px 3px 0 #515d38}
