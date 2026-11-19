@@ -14,7 +14,7 @@ import './feedback.css'
 import './menu-overrides.css'
 import './replay.css'
 
-const APP_VERSION = '0.24'
+const APP_VERSION = '0.25'
 document.title = 'Terrace Wars — Block gegen Block.'
 const loadingMessages = [
   'Fäuste werden bandagiert',
@@ -70,6 +70,14 @@ function loadCampaignRecord(): number {
   } catch {
     return 0
   }
+}
+function shuffledDeck(deck: number[]): number[] {
+  const next = [...deck]
+  for (let i = next.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[next[i], next[j]] = [next[j], next[i]]
+  }
+  return next
 }
 
 function multiplayerHealthUrl() {
@@ -188,6 +196,7 @@ function App() {
   const hype = onlineRole === 'red' ? game.redHype : game.hype
   const selectedCard = cards[myQueue[selected]]
   const nextCard = cards[myQueue[4]]
+  const averageDeckCost = deck.length ? deck.reduce((sum, id) => sum + cards[id].cost, 0) / deck.length : 0
   const hypePercent = Math.round(hype * 10)
   const time = game.overtime > 0
     ? Math.max(0, Math.ceil(SUDDEN_DEATH_DURATION - game.overtime))
@@ -460,7 +469,8 @@ function App() {
     if (!audio.current) audio.current = new AudioContext()
     void audio.current.resume()
     primeAudio()
-    const freshGame = newGame(deck, deck, true, deck)
+    const matchDeck = shuffledDeck(deck)
+    const freshGame = newGame(matchDeck, matchDeck, true, matchDeck)
     replayHistory.current = []
     setGame(freshGame)
     seenFlareIds.current.clear()
@@ -514,8 +524,8 @@ function App() {
       waitFor(15000, 'Der Server ist erreichbar, bestätigt die Suche aber nicht. Bitte den Multiplayer-Service auf den aktuellen main-Stand deployen.')
       const code = new URLSearchParams(window.location.search).get('match')
       connection.send(JSON.stringify(onlineMode === 'join' && code
-        ? { type: 'join', code, deck }
-        : onlineMode === 'matchmake' ? { type: 'matchmake', deck } : { type: 'create', deck }))
+        ? { type: 'join', code, deck: matchDeck }
+        : onlineMode === 'matchmake' ? { type: 'matchmake', deck: matchDeck } : { type: 'create', deck: matchDeck }))
     }
     connection.onmessage = event => {
       if (socket.current !== connection || completed) return
@@ -621,7 +631,8 @@ function App() {
     if (!audio.current) audio.current = new AudioContext()
     void audio.current.resume()
     primeAudio()
-    const freshGame = gameMode === 'campaign' ? newCampaignGame(deck, 1, campaignUpgrades) : newGame(deck)
+    const matchDeck = shuffledDeck(deck)
+    const freshGame = gameMode === 'campaign' ? newCampaignGame(matchDeck, 1, campaignUpgrades) : newGame(matchDeck)
     replayHistory.current = []
     awardedCampaignKills.current = 0
     setOnlineRole('blue')
@@ -769,9 +780,9 @@ function App() {
        <div className="menu-note">Kostenloses Browser-MVP · Training gegen KI · Eigene, fiktive Vereine</div>
        {tutorial && <div className="tutorial-card"><div className="eyebrow">KURZANLEITUNG</div><h2>Dein Derby in drei Zügen</h2><ol><li><b>Karte wählen</b><span>Wähle eine der vier Karten unten.</span></li><li><b>Links platzieren</b><span>Setze Truppen in deiner Hälfte ein; Zauber treffen das ganze Feld.</span></li><li><b>Clubhaus stürmen</b><span>Zerstöre erst die Kneipen und dann das gegnerische Clubhaus.</span></li></ol><button className="secondary" onClick={closeTutorial}>VERSTANDEN</button></div>}
      </section>}
-       {page === 'deck' && <section className="page deck-page"><div className="deck-mode-overview"><button className={gameMode === 'arena' ? 'active' : ''} onClick={() => { setGameMode('arena'); setOnlineMode(null) }}><b>DERBY-DECK</b><small>{arenaDeck.map(id => cards[id]?.name).join(' · ')}</small></button><button className={gameMode === 'campaign' ? 'active' : ''} onClick={() => { setGameMode('campaign'); setOnlineMode(null) }}><b>KAMPAGNEN-DECK</b><small>{campaignDeck.map(id => cards[id]?.name).join(' · ')}</small></button></div><div className="eyebrow">{gameMode === 'campaign' ? 'KAMPAGNE · ' : onlineMode ? 'MULTIPLAYER · ' : ''}DEINE FIRM · {deck.length}/8 KARTEN</div><h1>{onlineMode === 'join' ? 'Dem Derby beitreten.' : onlineMode === 'create' ? 'Ein Derby eröffnen.' : onlineMode === 'matchmake' ? 'Gegner finden.' : gameMode === 'campaign' ? 'Verteidigungsdeck zusammenstellen.' : 'Die Startelf? Dein Deck.'}</h1><p>Wähle genau acht Karten. In der Kampagne platzierst du Einheiten an festen Stationen und hältst die Wellen auf.</p><div className="deck-slots" aria-label="Deine acht Deckplätze">{Array.from({ length: 8 }, (_, slot) => { const id = deck[slot]; const card = id === undefined ? null : cards[id]; return <div className={`deck-slot ${card ? 'filled' : 'empty'} ${replaceSlot === slot ? 'replace-target' : ''}`} key={slot} draggable={!!card} onDragStart={() => { deckDragSlot.current = slot }} onDragOver={event => event.preventDefault()} onDrop={() => { if (deckDragCard.current !== null) placeCardInSlot(deckDragCard.current, slot); else if (deckDragSlot.current !== null) moveDeckSlot(deckDragSlot.current, slot); deckDragCard.current = null; deckDragSlot.current = null }} onClick={() => card && setReplaceSlot(slot)} title={card ? 'Ziehen zum Sortieren · Klicken, um diese Karte zu ersetzen' : 'Leeren Deckplatz'}><span className="deck-slot-number">{String(slot + 1).padStart(2, '0')}</span>{card ? <><div className="deck-slot-art">{cardArt(card)}</div><b title={card.name}>{card.name}</b><button className="deck-slot-remove" onClick={event => { event.stopPropagation(); toggleDeck(id) }} aria-label={`${card.name} aus Deckplatz ${slot + 1} entfernen`}>×</button></> : <span className="deck-slot-plus">＋</span>}</div> })}</div><button className="primary deck-start-button" disabled={deck.length !== 8} onClick={start}>{onlineMode === 'join' ? 'DERBY BEITRETEN' : onlineMode === 'create' ? 'EINLADUNG ERSTELLEN' : onlineMode === 'matchmake' ? 'GEGNER SUCHEN' : gameMode === 'campaign' ? 'KAMPAGNE STARTEN' : 'MIT DIESEM DECK SPIELEN'} <Play size={18} /></button><div className="deck-selection-heading"><span>ALLE KARTEN</span><small>{replaceSlot !== null ? `Slot ${replaceSlot + 1} ersetzen · ` : ''}{deck.length}/8 ausgewählt · Klick zum Hinzufügen oder Entfernen</small></div><div className="collection">{cards.filter(card => !card.hidden && (gameMode !== 'campaign' || !card.kind)).map(card => { const id = cards.indexOf(card)
+       {page === 'deck' && <section className="page deck-page"><div className="deck-mode-overview"><button className={gameMode === 'arena' ? 'active' : ''} onClick={() => { setGameMode('arena'); setOnlineMode(null) }}><b>DERBY-DECK</b><small>{arenaDeck.map(id => cards[id]?.name).join(' · ')}</small></button><button className={gameMode === 'campaign' ? 'active' : ''} onClick={() => { setGameMode('campaign'); setOnlineMode(null) }}><b>KAMPAGNEN-DECK</b><small>{campaignDeck.map(id => cards[id]?.name).join(' · ')}</small></button></div><div className="eyebrow">{gameMode === 'campaign' ? 'KAMPAGNE · ' : onlineMode ? 'MULTIPLAYER · ' : ''}DEINE FIRM · {deck.length}/8 KARTEN</div><p>Wähle genau acht Karten. In der Kampagne platzierst du Einheiten an festen Stationen und hältst die Wellen auf.</p><div className="deck-average-hype">DURCHSCHNITTLICHER HYPE <b>{averageDeckCost.toFixed(1)}</b></div><div className="deck-slots" aria-label="Deine acht Deckplätze">{Array.from({ length: 8 }, (_, slot) => { const id = deck[slot]; const card = id === undefined ? null : cards[id]; return <div className={`deck-slot ${card ? 'filled' : 'empty'} ${card ? rarityClass(card) : ''} ${replaceSlot === slot ? 'replace-target' : ''}`} key={slot} draggable={!!card} onDragStart={() => { deckDragSlot.current = slot }} onDragOver={event => event.preventDefault()} onDrop={() => { if (deckDragCard.current !== null) placeCardInSlot(deckDragCard.current, slot); else if (deckDragSlot.current !== null) moveDeckSlot(deckDragSlot.current, slot); deckDragCard.current = null; deckDragSlot.current = null }} onClick={() => card && setReplaceSlot(slot)} title={card ? 'Ziehen zum Sortieren · Klicken, um diese Karte zu ersetzen' : 'Leeren Deckplatz'}><span className="deck-slot-number">{String(slot + 1).padStart(2, '0')}</span>{card ? <><div className="deck-slot-art">{cardArt(card)}</div><span className="card-cost deck-slot-cost">{card.cost}</span><b title={card.name}>{card.name}</b><button className="deck-slot-remove" onClick={event => { event.stopPropagation(); toggleDeck(id) }} aria-label={`${card.name} aus Deckplatz ${slot + 1} entfernen`}>×</button></> : <span className="deck-slot-plus">＋</span>}</div> })}</div><button className="primary deck-start-button" disabled={deck.length !== 8} onClick={start}>{onlineMode === 'join' ? 'DERBY BEITRETEN' : onlineMode === 'create' ? 'EINLADUNG ERSTELLEN' : onlineMode === 'matchmake' ? 'GEGNER SUCHEN' : gameMode === 'campaign' ? 'KAMPAGNE STARTEN' : 'MIT DIESEM DECK SPIELEN'} <Play size={18} /></button><div className="deck-selection-heading"><span>ALLE KARTEN</span><small>{replaceSlot !== null ? `Slot ${replaceSlot + 1} ersetzen · ` : ''}{deck.length}/8 ausgewählt · Klick zum Hinzufügen oder Entfernen</small></div><div className="collection">{cards.filter(card => !card.hidden && (gameMode !== 'campaign' || !card.kind)).map(card => { const id = cards.indexOf(card)
        const selectedInDeck = deck.indexOf(id)
-       return <article className={`collection-card ${rarityClass(card)} ${selectedInDeck >= 0 ? 'deck-selected' : ''}`} key={id} draggable onDragStart={() => { deckDragCard.current = id }} onDragEnd={() => { deckDragCard.current = null }}><span className="card-cost">{card.cost}</span>{cardArt(card)}<span className={`rarity ${rarityClass(card)}`}>{card.rarity} · {card.cost} Hype</span><h2>{card.name}</h2><p>{card.role}</p><div className="card-stats">{card.hp} HP · {card.damage} Schaden<br />{card.kind === 'building' ? 'Gebäude' : `${card.rate}s Angriff · Tempo ${card.speed}`}</div><button className="secondary" onClick={() => toggleDeck(id)}>{selectedInDeck >= 0 ? `${selectedInDeck + 1} · Entfernen` : '＋ Hinzufügen'}</button>{selectedInDeck >= 0 && <button className="secondary deck-reorder" onClick={() => reorder(selectedInDeck)}>Nach vorne ↑</button>}</article>
+       return <article className={`collection-card ${rarityClass(card)} ${selectedInDeck >= 0 ? 'deck-selected' : ''}`} key={id} draggable onDragStart={() => { deckDragCard.current = id }} onDragEnd={() => { deckDragCard.current = null }}><span className="card-cost">{card.cost}</span>{cardArt(card)}<span className={`rarity ${rarityClass(card)}`}>{card.rarity} · {card.cost} Hype</span><h2>{card.name}</h2><p>{card.role}</p><div className="card-stats">{card.hp} HP · {card.damage} Schaden<br />{card.kind === 'building' ? 'Gebäude' : `${card.rate}s Angriff · Tempo ${card.speed}`}</div><button className="secondary" disabled={selectedInDeck >= 0} onClick={() => toggleDeck(id)}>{selectedInDeck >= 0 ? 'IM DECK' : '＋ Hinzufügen'}</button></article>
         })}</div></section>}
       {page === 'arena' && <section className={`page arena-page ${game.result ? 'showing-result' : ''}`}>
           <div className="mobile-match-timer" aria-label={campaignMode ? 'Aktuelle Welle' : 'Verbleibende Spielzeit'}>{campaignMode ? `WELLE ${game.campaign?.wave ?? 1}` : formattedTime}</div>
