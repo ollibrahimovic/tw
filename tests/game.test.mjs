@@ -169,7 +169,7 @@ test('sausage sellers leave short-lived sausage drops while moving', () => {
   for (let i = 0; i < 50; i++) g = tick(g, .05)
   assert.equal(g.sausages.length, 0)
 })
-test('flitzer ignores enemy units and keeps charging buildings', () => {
+test('flitzer chooses the nearest target by distance and keeps moving toward it', () => {
   let g = newGame([19])
   g.aiClock = 10000
   g = deploy(g, 0, 30, 31)
@@ -177,8 +177,9 @@ test('flitzer ignores enemy units and keeps charging buildings', () => {
   ready(g)
   const x = g.units[0].x
   g = tick(g, .05)
-  assert.equal(g.units[0].targetId, undefined)
-  assert.ok(g.units[0].x > x)
+  assert.equal(g.units[0].targetId, 900)
+  assert.equal(g.units[0].state, 'attack')
+  assert.equal(g.units[0].x, x, 'an in-range target does not require movement')
 })
 test('nearby enemy units are distracted by the flitzer', () => {
   let g = newGame([19])
@@ -203,9 +204,14 @@ test('units cross bridges and attack the correct enemy fortress after an outpost
   assert.ok(g.hp.redFortress < 3000)
   assert.equal(g.hp.blueFortress, 2400)
 })
-test('fortress destruction ends immediately and completed games are frozen', () => {
+test('fortress destruction holds the final arena for one second before ending', () => {
   let g = fresh()
   g.hp.redFortress = 0
+  g = tick(g, .05)
+  assert.equal(g.result, null)
+  assert.equal(g.endingResult, 'DERBYSIEG!')
+  for (let i = 0; i < 59; i++) g = tick(g, .05)
+  assert.equal(g.result, null)
   g = tick(g, .05)
   assert.equal(g.result, 'DERBYSIEG!')
   assert.equal(tick(g, 1), g)
@@ -369,19 +375,19 @@ test('pub guards fire when an enemy has crossed the bridge', () => {
   }
 })
 
-test('troops pursue enemies outside weapon range before attacking buildings, then resume their lane', () => {
+test('troops keep the nearer building objective instead of switching to a farther enemy', () => {
   let g = deploy(fresh(), 0, 30, 31)
   g.aiClock = 10000
   Object.assign(g.units[0], { x: 78, y: 26, routeIndex: 2, hp: 10000 })
   g.units.push({ ...g.units[0], id: 900, side: 'red', x: 73, y: 38, hp: 80, cooldown: 100, card: { ...cards[0], speed: 0, damage: 0 } })
   ready(g)
-  const before = Math.hypot(78 - 73, 26 - 38)
+  const before = Math.hypot(78 - 79.6875, 26 - 19.444444444444443)
   g = tick(g, .05)
-  assert.equal(g.units[0].targetId, 900)
-  assert.ok(Math.hypot(g.units[0].x - 73, g.units[0].y - 38) < before)
-  assert.equal(g.hp.redPubOne, 1200, 'enemy takes priority over pub in weapon range')
+  assert.equal(g.units[0].targetId, undefined)
+  assert.equal(g.units[0].goalBuilding, 'redPubOne')
+  assert.ok(g.hp.redPubOne < 1200, 'nearest building objective can be attacked without switching targets')
   for (let i = 0; i < 80 && g.units.some(u => u.id === 900); i++) g = tick(g, .05)
-  assert.ok(!g.units.some(u => u.id === 900), 'pursued enemy is attacked and killed')
+  assert.ok(g.units.some(u => u.id === 900), 'farther enemy is not selected as a distraction')
   assert.equal(g.units[0].routeIndex, 2, 'pursuit does not skip lane checkpoints')
   for (let i = 0; i < 80; i++) g = tick(g, .05)
   assert.equal(g.units[0].targetId, undefined)
@@ -416,8 +422,9 @@ test('units expose their upward-facing back and Ultra hits create a blood splash
   assert.equal(g.units[0].facingBack, true)
   g.units.push({ ...g.units[0], id: 900, side: 'red', x: g.units[0].x + 1, y: g.units[0].y, hp: 1000 })
   g = tick(g, .05)
-  assert.ok(g.blood.length >= 1)
-  assert.ok(g.blood.some(splash => splash.x === g.units[1].x))
+  // The unit had already locked its pub before the enemy spawned, so the
+  // late spawn must not distract it.
+  assert.equal(g.blood.length, 0)
 })
 
 test('nearby units spread sideways instead of occupying the same spot', () => {

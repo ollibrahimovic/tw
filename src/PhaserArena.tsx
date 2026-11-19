@@ -144,7 +144,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
              .setScale(character
                 ? key.includes(`fan-${cards.findIndex(card => card.name === 'Nachwuchs')}-`) ? .18
                 : key.includes(`fan-${cards.findIndex(card => card.name === 'Fanmarsch')}-`) ? .42
-                 : key.includes(`fan-${cards.findIndex(card => card.name === 'WÃƒÂ¼rstchenverkÃƒÂ¤ufer')}-`) ? .42
+                 : key.includes(`fan-${cards.findIndex(card => card.name === 'Würstchenverkäufer')}-`) ? .42
                  : .32
                : .28)
              .setAlpha(alpha).setDepth(depth)
@@ -250,11 +250,11 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           phaseBackdrop.clear()
           phaseText.setPosition(x, y - (suddenDeath ? 10 : finalCountdown ? 10 : 6))
             .setScale(suddenDeath ? 1 + Math.sin(animationClock * .01) * .04 : pulse)
-            .setText(suddenDeath ? 'Ã¢ËœÂ  SUDDEN DEATH Ã¢ËœÂ ' : finalCountdown ? String(Math.ceil(seconds)) : 'LETZTE 60 SEKUNDEN')
+             .setText(suddenDeath ? '☠ SUDDEN DEATH ☠' : finalCountdown ? String(Math.ceil(seconds)) : 'LETZTE 60 SEKUNDEN')
             .setAlpha(opacity)
             .setVisible(true)
           phaseSubtitle.setPosition(x, y + (suddenDeath ? 35 : finalCountdown ? 43 : 25))
-            .setText(suddenDeath ? 'CLUBHAUS FÃƒâ€žLLT ODER VERLÃƒâ€žNGERUNG ENDET' : finalCountdown ? 'NOCH ZEIT' : 'ENDSPURT')
+             .setText(suddenDeath ? 'CLUBHAUS FÄLLT ODER VERLÄNGERUNG ENDET' : finalCountdown ? 'NOCH ZEIT' : 'ENDSPURT')
             .setAlpha(opacity)
             .setVisible(true)
         }
@@ -499,18 +499,34 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
         }
         const drawBuilding = (building: typeof buildings[number]) => {
           const hp = gameRef.current.hp[building.key]
-          const activated = gameRef.current.hp[`${building.side}PubOne`] <= 0 ||
-            gameRef.current.hp[`${building.side}PubTwo`] <= 0
+           const pubActivated = gameRef.current.hp[`${building.side}PubOne`] <= 0 ||
+             gameRef.current.hp[`${building.side}PubTwo`] <= 0
+           const activated = building.key.includes('Fortress')
+             ? hp < building.max || pubActivated
+             : pubActivated
           const at = toScreen(building.x, building.y)
-          const fortressArt = building.key.includes('Fortress')
-          const shot = gameRef.current.flares.find(flare => flare.source === building.key)
-          const firing = !!shot && shot.age + stateAge < .18
-          const artKey = !fortressArt && firing ? `pub-throw-${displaySide(building.side)}-${artHealth(hp, building.max)}` :
+           const fortressArt = building.key.includes('Fortress')
+           const shot = gameRef.current.flares.find(flare => flare.source === building.key)
+           const firing = !!shot && shot.age + stateAge < .18
+           const gatlingCharging = fortressArt && hp > 0 && hp < building.max &&
+             gameRef.current.buildingCooldown[building.key] <= .24
+           if (gatlingCharging) {
+             const pulse = .5 + Math.sin(animationClock * .012) * .25
+             const chargePoint = { x: at.x, y: at.y - 58 }
+             dynamicGraphics.fillStyle(0xffd36b, .08 + pulse * .06)
+             dynamicGraphics.fillCircle(chargePoint.x, chargePoint.y, 13 + pulse * 4)
+             dynamicGraphics.lineStyle(2, 0xffd36b, .35 + pulse * .35)
+             dynamicGraphics.strokeCircle(chargePoint.x, chargePoint.y, 10 + pulse * 5)
+             dynamicGraphics.lineStyle(2.5, 0xfff0ae, .8)
+             dynamicGraphics.lineBetween(chargePoint.x - 7, chargePoint.y, chargePoint.x + 7, chargePoint.y)
+             dynamicGraphics.lineBetween(chargePoint.x, chargePoint.y - 7, chargePoint.x, chargePoint.y + 7)
+           }
+           const artKey = !fortressArt && firing ? `pub-throw-${displaySide(building.side)}-${artHealth(hp, building.max)}` :
             `club-${displaySide(building.side)}-${fortressArt}-false-${artHealth(hp, building.max)}`
           if (showArt(building.key,
             artKey,
             // Rubble is ground decoration, never part of the actor depth sort.
-             // Ground: 0, rubble: .4, puddles: .5, actors: 1Ã¢â‚¬â€œ2, airborne FX: 5.
+             // Ground: 0, rubble: .4, puddles: .5, actors: 1–2, airborne FX: 5.
              at, false, 1, hp <= 0 ? .4 : 1 + at.y / this.scale.height)) {
              drawBuildingDamage(building, at, hp)
              if (fortressArt && activated && hp > 0) {
@@ -735,7 +751,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
              return
           }
           const color = displaySide(unit.side) === 'blue' ? BLUE : RED
-            const radius = unit.card.name === 'Nachwuchs' ? 4 : unit.card.name === 'WÃƒÂ¼rstchenverkÃƒÂ¤ufer' ? 12 : unit.card.name === 'Fanmarsch' ? 11 : unit.card.name === 'Flitzer' ? 11 : 8
+           const radius = unit.card.name === 'Nachwuchs' ? 4 : unit.card.name === 'Würstchenverkäufer' ? 12 : unit.card.name === 'Fanmarsch' ? 11 : unit.card.name === 'Flitzer' ? 11 : 8
           if (unit.card.name === 'Der Ultra') drawUltra(unit, ghost)
           else {
             dynamicGraphics.fillStyle(0x080d0c, .5)
@@ -748,8 +764,8 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
             dynamicGraphics.strokeCircle(p.x, p.y, radius)
           }
           dynamicGraphics.fillStyle(DARK, .8)
-            const barWidth = unit.card.name === 'Nachwuchs' ? 14 : unit.card.name === 'Der Ultra' ? 24 : unit.card.name === 'WÃƒÂ¼rstchenverkÃƒÂ¤ufer' ? 28 : unit.card.name === 'Fanmarsch' ? 26 : 20
-             const barY = unit.card.name === 'Nachwuchs' ? -24 : unit.card.name === 'Der Ultra' ? -48 : unit.card.name === 'WÃƒÂ¼rstchenverkÃƒÂ¤ufer' ? -38 : unit.card.name === 'Fanmarsch' ? -30 : -22
+             const barWidth = unit.card.name === 'Nachwuchs' ? 14 : unit.card.name === 'Der Ultra' ? 24 : unit.card.name === 'Würstchenverkäufer' ? 28 : unit.card.name === 'Fanmarsch' ? 26 : 20
+              const barY = unit.card.name === 'Nachwuchs' ? -24 : unit.card.name === 'Der Ultra' ? -48 : unit.card.name === 'Würstchenverkäufer' ? -38 : unit.card.name === 'Fanmarsch' ? -30 : -22
           dynamicGraphics.fillRect(p.x - barWidth / 2, p.y + barY, barWidth, 3)
            dynamicGraphics.fillStyle(color, ghost ? .5 : 1)
             dynamicGraphics.fillRect(p.x - barWidth / 2, p.y + barY, barWidth * Math.max(0, unit.hp / unit.card.hp), 3)
@@ -848,9 +864,15 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
                  strokeThickness: 4,
                })
            }
-           const bridgeUnits = current.units.filter(unit =>
-             unit.hp > 0 && (unit.spawnDelay ?? 0) <= 0 && unit.state === 'bridge' && unit.card.range <= 4,
-           )
+            if (!showUnitStatesRef.current) {
+              for (const [id, label] of bridgeQueueLabels) {
+                label.destroy()
+                bridgeQueueLabels.delete(id)
+              }
+            }
+            const bridgeUnits = showUnitStatesRef.current ? current.units.filter(unit =>
+              unit.hp > 0 && (unit.spawnDelay ?? 0) <= 0 && unit.state === 'bridge' && unit.card.range <= 4,
+            ) : []
            for (const lane of [0, 1] as const) {
              for (const side of ['blue', 'red'] as const) {
                const queued = bridgeUnits
@@ -863,7 +885,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
                  bridgeQueueLabels.set(unit.id, label)
                  usedBridgeQueueLabels.add(unit.id)
                  label.setPosition(p.x, p.y - 16)
-                   .setText(`${index === 0 ? 'Ã¢â€“Â¶' : index + 1}`)
+                    .setText(`${index === 0 ? '▶' : index + 1}`)
                    .setStyle({
                      color: index === 0 ? '#ffe39a' : '#d7dfc0',
                      fontFamily: 'Arial Black, sans-serif',
@@ -954,7 +976,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           dynamicGraphics.lineStyle(2, allowed ? 0xdfffe8 : 0xff9b8e, .8)
           dynamicGraphics.strokeRect(p.x - footprintWidth / 2, p.y - footprintHeight / 2, footprintWidth, footprintHeight)
            if (selectedRef.current.kind === 'building') {
-             showArt('preview', `stall-blue-${selectedRef.current.name === 'WÃƒÂ¼rstchenbude' ? 'sausage' : 'beer'}-100`,
+               showArt('preview', `stall-blue-${selectedRef.current.name === 'Würstchenbude' ? 'sausage' : 'beer'}-100`,
                p, false, .48, 9)
              return
            }
@@ -1072,7 +1094,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
           for (const structure of gameRef.current.structures) {
             const p = toScreen(structure.x, structure.y)
              showArt(`structure-${structure.id}`,
-              `stall-${displaySide(structure.side)}-${structure.card.name === 'WÃƒÂ¼rstchenbude' ? 'sausage' : 'beer'}-${artHealth(structure.hp, structure.max)}`,
+               `stall-${displaySide(structure.side)}-${structure.card.name === 'Würstchenbude' ? 'sausage' : 'beer'}-${artHealth(structure.hp, structure.max)}`,
               p, false, 1, structure.hp <= 0 ? .4 : 1 + p.y / this.scale.height)
              healthBar(p, structure.hp, structure.max, structure.side, 32)
              buildingHpLabel(`structure-${structure.id}`, p, structure.hp, structure.max)

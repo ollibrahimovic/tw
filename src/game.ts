@@ -4,7 +4,7 @@ import type { TileRect } from './grid.ts'
 export type Side = 'blue' | 'red'
 export type UnitState = 'advance' | 'bridge' | 'pursue' | 'surround' | 'attack' | 'siege'
 export type MoveDirection = 'forward' | 'backward' | 'left' | 'right' | 'forward-left' | 'forward-right' | 'backward-left' | 'backward-right'
-export type Unit = { id: number; lane: number; x: number; y: number; side: Side; card: Card; hp: number; cooldown: number; routeIndex: number; state: UnitState; moveDirection: MoveDirection; targetId?: number; attackTargetId?: number; siegeBuilding?: BuildingKey; siegeStructureId?: number; moving: boolean; facingBack: boolean; lateralOffset?: number; spawnDelay?: number; spawnDuration?: number }
+export type Unit = { id: number; lane: number; x: number; y: number; side: Side; card: Card; hp: number; cooldown: number; routeIndex: number; state: UnitState; moveDirection: MoveDirection; targetId?: number; attackTargetId?: number; goalBuilding?: BuildingKey; preferredPub?: BuildingKey; siegeBuilding?: BuildingKey; siegeStructureId?: number; moving: boolean; facingBack: boolean; lateralOffset?: number; spawnDelay?: number; spawnDuration?: number }
 export type SausageDrop = { id: number; x: number; y: number; age: number }
 export type Structure = { id: number; x: number; y: number; side: Side; card: Card; hp: number; max: number; cooldown: number; age: number }
 export function laneRoute(side: Side, lane: number) {
@@ -23,9 +23,9 @@ export const FLARE_DAMAGE = 30
 // margin so units cannot slip past the lane entrance before the first shot.
 export const PUB_ATTACK_RANGE = 28
 export const MOVEMENT_SPEED_FACTOR = .92
-export const UNIT_ALERT_RADIUS = 24
-export const UNIT_PURSUIT_RADIUS = 32
-export const FLITZER_DECOY_RADIUS = 48
+export const UNIT_ALERT_RADIUS = 16
+export const UNIT_PURSUIT_RADIUS = 24
+export const FLITZER_DECOY_RADIUS = 24
 export const UNIT_COLLISION_DISTANCE = 3.5
 export const SAUSAGE_LIFETIME = 2.4
 const BRIDGE_START_X = 46.5
@@ -86,7 +86,7 @@ export const buildings: { key: BuildingKey; side: Side; x: number; y: number; ma
   { key: 'redPubOne', side: 'red', ...rectCenter(TILE_BUILDINGS.redPubOne), max: 1200 },
   { key: 'redPubTwo', side: 'red', ...rectCenter(TILE_BUILDINGS.redPubTwo), max: 1200 },
 ]
-export type Game = { time: number; overtime: number; hype: number; redHype: number; aiHype: number; aiClock: number; aiDeck: number[]; aiLastCard?: number; multiplayer: boolean; units: Unit[]; structures: Structure[]; hp: Record<BuildingKey, number>; queue: number[]; redQueue: number[]; id: number; result: string | null; log: string[]; shots: number; totalDamage: number; damageEvents: DamageEvent[]; flares: Flare[]; impacts: { id: number; x: number; y: number; age: number }[]; blood: { id: number; x: number; y: number; age: number }[]; bloodStains: { id: number; x: number; y: number; age: number }[]; spells: Spell[]; buildingCooldown: Record<BuildingKey, number>; beers: Beer[]; puddles: { id: number; x: number; y: number; age: number }[]; torches: Torch[]; fires: { id: number; x: number; y: number; age: number }[]; sausages: SausageDrop[] }
+export type Game = { time: number; overtime: number; hype: number; redHype: number; aiHype: number; aiClock: number; aiDeck: number[]; aiLastCard?: number; multiplayer: boolean; units: Unit[]; structures: Structure[]; hp: Record<BuildingKey, number>; queue: number[]; redQueue: number[]; id: number; result: string | null; endingCountdown?: number; endingResult?: string; log: string[]; shots: number; totalDamage: number; damageEvents: DamageEvent[]; flares: Flare[]; impacts: { id: number; x: number; y: number; age: number }[]; blood: { id: number; x: number; y: number; age: number }[]; bloodStains: { id: number; x: number; y: number; age: number }[]; spells: Spell[]; buildingCooldown: Record<BuildingKey, number>; beers: Beer[]; puddles: { id: number; x: number; y: number; age: number }[]; torches: Torch[]; fires: { id: number; x: number; y: number; age: number }[]; sausages: SausageDrop[] }
 export function newGame(deck: number[], aiDeck = AI_DECK, multiplayer = false, redDeck = aiDeck): Game {
   return { time: 180, overtime: 0, hype: 7, redHype: 7, aiHype: 7, aiClock: 2, aiDeck: [...aiDeck], aiLastCard: undefined, multiplayer, units: [], structures: [], hp: Object.fromEntries(buildings.map(b => [b.key, b.max])) as Game['hp'], queue: [...deck], redQueue: [...redDeck], id: 1, result: null, log: ['Anpfiff! Jede Lane führt über die gegnerische Kneipe.'], shots: 0, totalDamage: 0, damageEvents: [], flares: [], impacts: [], blood: [], bloodStains: [], spells: [], buildingCooldown: Object.fromEntries(buildings.map(b => [b.key, 0])) as Game['buildingCooldown'], beers: [], puddles: [], torches: [], fires: [], sausages: [] }
 }
@@ -144,11 +144,11 @@ export function deploymentPoint(g: Game, card: Card, x: number, y: number, side:
   const pub = `${enemy}Pub${tile.x < 9.5 ? 'One' : 'Two'}` as BuildingKey
   const captured = g.hp[pub] <= 0
   const allowed = (xTile: number, yTile: number) => side === 'blue'
-    ? yTile >= 17 || (captured && yTile >= 8 && yTile <= 14)
-    : yTile <= 14 || (captured && yTile >= 17 && yTile <= 23)
+    ? yTile >= 17 || (captured && yTile >= 7 && yTile <= 14)
+    : yTile <= 14 || (captured && yTile >= 17 && yTile <= 24)
   const boundary = side === 'blue' ? 17 : 14
   if (!allowed(tile.x, tile.y)) {
-    const targetY = captured ? (side === 'blue' ? 8 : 23) : boundary
+    const targetY = captured ? (side === 'blue' ? 7 : 24) : boundary
     point = card.kind === 'building'
       ? snapBuildingToTile(fromTile({ x: tile.x, y: targetY }))
       : snapToTile(fromTile({ x: tile.x, y: targetY }))
@@ -191,7 +191,7 @@ export function canDeploy(g: Game, card: Card, x: number, y: number, side: Side 
   const enemy = side === 'blue' ? 'red' : 'blue'
   const pub = `${enemy}Pub${tile.x < 9.5 ? 'One' : 'Two'}` as BuildingKey
   const ownHalf = side === 'blue' ? tile.y >= 17 : tile.y <= 14
-  const captured = g.hp[pub] <= 0 && (side === 'blue' ? tile.y >= 8 && tile.y <= 14 : tile.y >= 17 && tile.y <= 23)
+   const captured = g.hp[pub] <= 0 && (side === 'blue' ? tile.y >= 7 && tile.y <= 14 : tile.y >= 17 && tile.y <= 24)
   return ownHalf || (card.kind !== 'building' && captured)
 }
 export function deploy(g: Game, slot: number, x: number, y: number, side: Side = 'blue'): Game {
@@ -218,10 +218,19 @@ export function deploy(g: Game, slot: number, x: number, y: number, side: Side =
     }
     return { ...update, structures: [...g.structures, structure] }
   }
-  const units = makeUnits(g.id, x, y, side, y < 49 ? 0 : 1, card)
+  const units: Unit[] = makeUnits(g.id, x, y, side, y < 49 ? 0 : 1, card)
+  const deploymentTile = toTile({ x, y })
+  const enemySide = side === 'blue' ? 'red' : 'blue'
+  const capturedArea = side === 'blue'
+    ? deploymentTile.y >= 7 && deploymentTile.y <= 14
+    : deploymentTile.y >= 17 && deploymentTile.y <= 24
+  const lanePub = `${enemySide}Pub${y < 49 ? 'One' : 'Two'}` as BuildingKey
+  const otherPub = `${enemySide}Pub${y < 49 ? 'Two' : 'One'}` as BuildingKey
+  const preferredPub = capturedArea && g.hp[lanePub] <= 0 && g.hp[otherPub] > 0 ? otherPub : undefined
   const solids = solidBuildings(g)
   for (const unit of units) {
     resolveBuildings(unit, solids)
+    if (preferredPub) unit.preferredPub = preferredPub
     if (card.name === 'Nachwuchs') unit.lane = unit.y < 49 ? 0 : 1
   }
   return { ...update, id: g.id + units.length, units: [...g.units, ...units] }
@@ -445,6 +454,7 @@ function surroundWaypoint(u: Unit, target: Unit) {
 export function tick(previous: Game, dt: number, random = Math.random): Game {
   if (previous.result) return previous
   const g: Game = { ...previous, overtime: previous.time <= 0 ? previous.overtime + dt : 0, hp: { ...previous.hp }, structures: previous.structures.map(s => ({ ...s, cooldown: Math.max(0, s.cooldown - dt), age: s.age + dt })), units: previous.units.map(u => ({ ...u, moving: false, spawnDelay: Math.max(0, (u.spawnDelay ?? 0) - dt) })), log: [...previous.log], buildingCooldown: { ...previous.buildingCooldown }, damageEvents: previous.damageEvents.map(e => ({ ...e, age: e.age + dt })).filter(e => e.age < .9), flares: [], impacts: previous.impacts.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < .45), blood: previous.blood.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < .58), bloodStains: previous.bloodStains.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < BLOOD_STAIN_LIFETIME), spells: previous.spells.map(s => ({ ...s, age: s.age + dt })).filter(s => s.age < spellLifetime(s.type)), beers: [], puddles: previous.puddles.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < PUDDLE_LIFETIME), torches: [], fires: previous.fires.map(p => ({ ...p, age: p.age + dt })).filter(p => p.age < FIRE_LIFETIME), sausages: (previous.sausages ?? []).map(s => ({ ...s, age: s.age + dt })).filter(s => s.age < SAUSAGE_LIFETIME) }
+  if (g.endingCountdown !== undefined) g.endingCountdown -= dt
   for (const old of previous.torches) {
      const target = typeof old.target === 'number' ? g.units.find(u => u.id === old.target && targetableUnit(u)) : undefined
     const torch = { ...old, age: old.age + dt, x: target?.x ?? old.x, y: target?.y ?? old.y }
@@ -543,11 +553,11 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
         if (type) {
            const enemy = g.units.filter(u => u.side === 'blue' && targetableUnit(u)).sort((a, b) => b.x - a.x)[0]
           const preferredPub = buildings.find(b => b.key === `bluePub${lane === 0 ? 'One' : 'Two'}` && g.hp[b.key] > 0)
-          const fallback = preferredPub
-            ?? buildings.find(b => (b.key === 'bluePubOne' || b.key === 'bluePubTwo') && g.hp[b.key] > 0)
-            ?? buildings.find(b => b.key === 'blueFortress' && g.hp[b.key] > 0)!
-          const target = enemy ?? fallback
-          g.spells.push({ id: g.id++, type, side: 'red', x: target.x, y: target.y, fromX: 95, fromY: 50, age: 0 })
+           const fallback = preferredPub
+             ?? buildings.find(b => (b.key === 'bluePubOne' || b.key === 'bluePubTwo') && g.hp[b.key] > 0)
+             ?? buildings.find(b => b.key === 'blueFortress' && g.hp[b.key] > 0)
+           const target = enemy ?? fallback
+           if (target) g.spells.push({ id: g.id++, type, side: 'red', x: target.x, y: target.y, fromX: 95, fromY: 50, age: 0 })
         } else if (card.kind === 'building') {
           const p = fromTile({ x: lane === 0 ? 7 : 12, y: 10 })
           if (canDeploy(g, card, p.x, p.y, 'red')) g.structures.push({ id: g.id++, ...p, side: 'red', card, hp: card.hp, max: card.hp, cooldown: 0, age: 0 })
@@ -596,10 +606,16 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
      u.lateralOffset = (u.lateralOffset ?? 0) * Math.max(0, 1 - dt * (bridgeTraffic ? 2.2 : 5))
     u.cooldown -= dt
     const allies = g.units.filter(v => v.side === u.side && activeUnit(v) && distance(u, v) < 13)
+    const matchEnding = g.endingCountdown !== undefined
     const marchTank = u.card.name === 'Fanmarsch'
     const enemySide = u.side === 'blue' ? 'red' : 'blue'
-    const pub = buildings.find(b => b.key === `${enemySide}Pub${u.lane === 0 ? 'One' : 'Two'}`)!
-    const goal = g.hp[pub.key] > 0 ? pub : buildings.find(b => b.key === `${enemySide}Fortress`)!
+    const lanePub = buildings.find(b => b.key === `${enemySide}Pub${u.lane === 0 ? 'One' : 'Two'}`)!
+    const preferredPub = u.preferredPub ? buildings.find(b => b.key === u.preferredPub && g.hp[b.key] > 0) : undefined
+    const pub = preferredPub ?? lanePub
+    const routeGoal = g.hp[pub.key] > 0 ? pub : buildings.find(b => b.key === `${enemySide}Fortress`)!
+    if (u.goalBuilding && g.hp[u.goalBuilding] <= 0) u.goalBuilding = undefined
+    const lockedGoal = u.goalBuilding ? buildings.find(b => b.key === u.goalBuilding && g.hp[b.key] > 0) : undefined
+    const goal = lockedGoal ?? routeGoal
     if (u.siegeBuilding && g.hp[u.siegeBuilding] <= 0) u.siegeBuilding = undefined
     if (u.siegeStructureId && !g.structures.some(s => s.id === u.siegeStructureId && s.hp > 0)) u.siegeStructureId = undefined
     if (u.attackTargetId && !g.units.some(v => v.id === u.attackTargetId && v.side !== u.side && targetableUnit(v))) {
@@ -607,7 +623,7 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
     }
     const siegeBuilding = u.siegeBuilding ? buildings.find(b => b.key === u.siegeBuilding && g.hp[b.key] > 0) : undefined
     const siegeStructure = u.siegeStructureId ? g.structures.find(s => s.id === u.siegeStructureId && s.hp > 0) : undefined
-    const siegeLocked = !!siegeBuilding || !!siegeStructure
+    const siegeLocked = !!siegeBuilding || !!siegeStructure || !!lockedGoal
      const enemies = marchTank || siegeLocked ? [] : g.units.filter(v => v.side !== u.side && targetableUnit(v))
     const designatedTarget = u.targetId
       ? enemies.find(v => v.id === u.targetId)
@@ -616,34 +632,34 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
       ? enemies.find(v => v.id === u.attackTargetId)
       : undefined
     if (u.card === cards[4]) for (const a of allies) a.hp = Math.min(a.card.hp, a.hp + 12 * dt)
-    const nearby = enemies.filter(v => distance(u, v) <= UNIT_ALERT_RADIUS).sort((a, b) => distance(u, a) - distance(u, b))
-    const rangedUnit = u.card === cards[2] || u.card === cards[7] || u.card === cards[15] || u.card.range > 4
-    const bridgeNearby = rangedUnit
-      ? enemies
-        .filter(v => {
-          const tile = toTile(v)
-          return tile.y >= 14.5 && tile.y <= 16.5 && distance(u, v) <= u.card.range + 3
-        })
-        .sort((a, b) => distance(u, a) - distance(u, b))
-      : []
-    const decoy = enemies.filter(v => v.card.name === 'Flitzer' && distance(u, v) <= FLITZER_DECOY_RADIUS).sort((a, b) => distance(u, a) - distance(u, b))[0]
-    const locked = enemies.find(v => v.id === u.targetId && distance(u, v) <= UNIT_PURSUIT_RADIUS)
-    // Defend against a unit in weapon range rather than chase a distant lock.
-    const immediate = nearby.find(v => distance(u, v) <= u.card.range + 1)
-    const beerFenceTarget = u.card === cards[2]
-      ? enemies
-        .filter(v => {
-          const from = toTile(u), to = toTile(v)
-          const crossesFence = (from.y < 14.5 && to.y > 16.5) || (from.y > 16.5 && to.y < 14.5)
-          return crossesFence && distance(u, v) <= u.card.range + 4
-        })
+    let target = attackLocked ?? designatedTarget
+    let structureTarget = siegeStructure
+    // Select exactly the nearest valid target once. The decision is locked
+    // until that target is destroyed; new spawns cannot distract the unit.
+    if (!target && !structureTarget && !marchTank && !siegeLocked) {
+      const nearestEnemy = enemies
+        .filter(v => distance(u, v) <= UNIT_PURSUIT_RADIUS)
         .sort((a, b) => distance(u, a) - distance(u, b))[0]
-      : undefined
-    // The Flitzer is deliberately distracting: nearby troops abandon their lane target and pursue it.
-    const target = attackLocked ?? designatedTarget ?? (marchTank || siegeLocked || u.card.name === 'Flitzer'
-      ? undefined
-      : decoy ?? bridgeNearby[0] ?? immediate ?? beerFenceTarget ?? locked ?? nearby[0])
-    const structureTarget = siegeStructure ?? (!target ? g.structures.filter(s => s.side !== u.side && s.hp > 0 && distance(u, s) <= UNIT_PURSUIT_RADIUS).sort((a, b) => distance(u, a) - distance(u, b))[0] : undefined)
+      const nearestStructure = g.structures
+        .filter(s => s.side !== u.side && s.hp > 0 && distance(u, s) <= UNIT_PURSUIT_RADIUS)
+        .sort((a, b) => distance(u, a) - distance(u, b))[0]
+      const candidates = [
+        nearestEnemy ? { kind: 'unit' as const, value: nearestEnemy, distance: distance(u, nearestEnemy) } : undefined,
+        nearestStructure ? { kind: 'structure' as const, value: nearestStructure, distance: distance(u, nearestStructure) } : undefined,
+        { kind: 'building' as const, value: goal, distance: distance(u, goal) },
+      ].filter(Boolean).sort((a, b) => a!.distance - b!.distance)
+      const nearest = candidates[0]
+      if (nearest?.kind === 'unit') target = nearest.value
+      else if (nearest?.kind === 'structure') {
+        structureTarget = nearest.value
+        u.siegeStructureId = nearest.value.id
+      } else if (nearest?.kind === 'building') {
+        u.goalBuilding = nearest.value.key
+      }
+    }
+    // A locked building objective controls route selection, but units must
+    // still use their lane waypoints and bridges instead of cutting directly
+    // across the arena.
     const pointTarget = target ?? structureTarget
     const escortTank = !target && !structureTarget && u.card.name !== 'Flitzer' && beforeBridge(u)
       ? g.units
@@ -662,9 +678,12 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
         })
         .sort((a, b) => distance(u, a) - distance(u, b))[0]
       : undefined
-    u.targetId = target?.id
-    const bridgeTarget = !!target && bridgeNearby.some(enemy => enemy.id === target.id)
-    const beerFenceShot = !!target && beerFenceTarget?.id === target.id
+    if (target) u.targetId = target.id
+    const bridgeTarget = !!target && (() => {
+      const tile = toTile(target)
+      return tile.y >= 14.5 && tile.y <= 16.5
+    })()
+    const beerFenceShot = false
     const inRange = !!pointTarget && distance(u, pointTarget) <= u.card.range +
       (u.card.name === 'Nachwuchs' ? 0 : bridgeTarget ? 2 : beerFenceShot ? 4 : 1)
     const focus = pointTarget ?? siegeBuilding ?? (u.routeIndex >= 2 ? goal : undefined)
@@ -681,7 +700,7 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
     else if (structureTarget || siegeBuilding || atBuilding) u.state = 'siege'
     else if (onBridge || (beforeBridge(u) && !!bridgeUnitAhead(u, g.units))) u.state = 'bridge'
     else u.state = 'advance'
-    if (inRange || (!pointTarget && atBuilding)) {
+    if (!matchEnding && (inRange || (!pointTarget && atBuilding))) {
       if (u.cooldown <= 0) {
         const damage = u.card.damage * (allies.some(a => a.card === cards[1]) ? 1.25 : 1)
         if (u.card === cards[2]) {
@@ -768,7 +787,7 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
             resolveBuildings(u, solids)
            }
            u.moving = movement > .001
-           if (u.moving && u.card.name === 'Würstchenverkäufer' && sausageDropTick) {
+            if (u.moving && u.card.name === 'Würstchenverkäufer' && sausageDropTick) {
              g.sausages.push({ id: g.id++, x: u.x, y: u.y, age: 0 })
            }
            if (u.moving) {
@@ -794,8 +813,12 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
   for (const b of buildings) {
     g.buildingCooldown[b.key] = Math.max(0, g.buildingCooldown[b.key] - dt)
     if (g.hp[b.key] <= 0) continue
+    if (g.endingCountdown !== undefined) continue
     const fortress = b.key.includes('Fortress')
-    if (fortress && g.hp[`${b.side}PubOne`] > 0 && g.hp[`${b.side}PubTwo`] > 0) continue
+    // Clubhouse gatling is active as soon as the clubhouse itself is hurt.
+    // Pub guards keep their existing independent pub-defense behavior.
+    if (fortress && g.hp[b.key] >= b.max &&
+      g.hp[`${b.side}PubOne`] > 0 && g.hp[`${b.side}PubTwo`] > 0) continue
      const target = g.units.filter(u => u.side !== b.side && targetableUnit(u) && distance(u, b) <= (fortress ? GATLING_ATTACK_RANGE : PUB_ATTACK_RANGE)).sort((a, c) => distance(a, b) - distance(c, b))[0]
     if (!target) continue
     if (g.buildingCooldown[b.key] <= 0) {
@@ -805,8 +828,15 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
   }
   for (const u of g.units) if (u.hp <= 0) g.bloodStains.push({ id: g.id++, x: u.x, y: u.y, age: 0 })
   g.units = g.units.filter(u => u.hp > 0)
-  if (g.hp.redFortress <= 0) g.result = 'DERBYSIEG!'
-  else if (g.hp.blueFortress <= 0) g.result = 'NIEDERLAGE'
+  const fortressResult = g.hp.redFortress <= 0 ? 'DERBYSIEG!' : g.hp.blueFortress <= 0 ? 'NIEDERLAGE' : undefined
+  if (fortressResult) {
+    if (g.endingCountdown === undefined) {
+      g.endingCountdown = 3
+      g.endingResult = fortressResult
+    } else if (g.endingCountdown <= 1e-9) {
+      g.result = g.endingResult ?? fortressResult
+    }
+  }
   else if (g.time <= 0) {
     const blue = Number(g.hp.redPubOne <= 0) + Number(g.hp.redPubTwo <= 0)
     const red = Number(g.hp.bluePubOne <= 0) + Number(g.hp.bluePubTwo <= 0)

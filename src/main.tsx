@@ -14,7 +14,7 @@ import './feedback.css'
 import './menu-overrides.css'
 import './replay.css'
 
-const APP_VERSION = '0.19'
+const APP_VERSION = '0.20'
 const loadingMessages = [
   'Fäuste werden bandagiert',
   'Zahnschutz wird angelegt',
@@ -277,12 +277,21 @@ function App() {
     if (previous !== game) replayHistory.current.push(game)
     if (replayHistory.current.length > 220) replayHistory.current.shift()
   }, [game, page, replayActive])
+  function decisiveReplayFocus() {
+    const currentEvent = game.damageEvents[game.damageEvents.length - 1] ?? game.impacts[game.impacts.length - 1]
+    if (currentEvent) return { x: currentEvent.x, y: currentEvent.y }
+    for (let i = replayHistory.current.length - 1; i >= 0; i--) {
+      const frame = replayHistory.current[i]
+      const event = frame.damageEvents[frame.damageEvents.length - 1] ?? frame.impacts[frame.impacts.length - 1]
+      if (event) return { x: event.x, y: event.y }
+    }
+    return { x: 50, y: 50 }
+  }
   useEffect(() => {
     if (game.result && game.result !== lastResult.current) {
       const resultClip = game.result === 'DERBYSIEG!' ? 'victory' : 'defeat'
       playClip(resultClip, .8)
-      const decisiveEvent = game.damageEvents[game.damageEvents.length - 1] ?? game.impacts[game.impacts.length - 1]
-      setReplayFocus(decisiveEvent ? { x: decisiveEvent.x, y: decisiveEvent.y } : { x: 50, y: 50 })
+       setReplayFocus(decisiveReplayFocus())
       const frames = replayHistory.current.length > 1
         ? replayHistory.current.slice(-100)
         : [game]
@@ -308,8 +317,7 @@ function App() {
     return () => window.clearInterval(id)
   }, [replayActive, replayFrames])
   function replayDecisiveScene() {
-    const decisiveEvent = game.damageEvents[game.damageEvents.length - 1] ?? game.impacts[game.impacts.length - 1]
-    setReplayFocus(decisiveEvent ? { x: decisiveEvent.x, y: decisiveEvent.y } : { x: 50, y: 50 })
+    setReplayFocus(decisiveReplayFocus())
     const frames = replayHistory.current.length > 1 ? replayHistory.current.slice(-100) : [game]
     setReplayFrames(frames)
     setReplayFrame(frames[0])
