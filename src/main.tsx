@@ -63,6 +63,14 @@ function loadCampaignUpgrades(): Record<string, number> {
     return {}
   }
 }
+function loadCampaignRecord(): number {
+  try {
+    const value = Number(localStorage.getItem('terrace-campaign-record') || 0)
+    return Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0
+  } catch {
+    return 0
+  }
+}
 
 function multiplayerHealthUrl() {
   const local = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -102,6 +110,7 @@ function App() {
   const [stickers, setStickers] = useState(loadStickers)
   const [stickerGain, setStickerGain] = useState(0)
   const [campaignUpgrades, setCampaignUpgrades] = useState(loadCampaignUpgrades)
+  const [campaignRecord, setCampaignRecord] = useState(loadCampaignRecord)
   const [showCampaignUpgrades, setShowCampaignUpgrades] = useState(false)
   const [replaceSlot, setReplaceSlot] = useState<number | null>(null)
   const preview = new URLSearchParams(window.location.search).get('preview')
@@ -157,6 +166,7 @@ function App() {
   const backgroundMusic = useRef<HTMLAudioElement | null>(null)
   const dragged = useRef<number | null>(null)
   const deckDragSlot = useRef<number | null>(null)
+  const deckDragCard = useRef<number | null>(null)
   const lastShot = useRef(0)
   const lastResult = useRef<string | null>(null)
   const seenSpellIds = useRef(new Set<number>())
@@ -375,6 +385,10 @@ function App() {
   }, [message])
   useEffect(() => {
     if (!campaignMode || !game.campaign) return
+    if (game.campaign.wave > campaignRecord) {
+      setCampaignRecord(game.campaign.wave)
+      try { localStorage.setItem('terrace-campaign-record', String(game.campaign.wave)) } catch { /* In-memory record remains usable. */ }
+    }
     const kills = game.campaign.kills
     const reward = kills - awardedCampaignKills.current
     if (reward <= 0) return
@@ -386,7 +400,7 @@ function App() {
     })
     setStickerGain(reward)
     window.setTimeout(() => setStickerGain(0), 1400)
-  }, [campaignMode, game.campaign?.kills])
+  }, [campaignMode, game.campaign?.kills, game.campaign?.wave, campaignRecord])
   useEffect(() => {
     if (countdown === null || !arenaReady) return
     if (countdown === 'go') {
@@ -703,6 +717,18 @@ function App() {
     setReplaceSlot(null)
     try { localStorage.setItem(deckStorageKey, JSON.stringify(next)) } catch { /* In-memory deck remains usable. */ }
   }
+  function placeCardInSlot(id: number, slot: number) {
+    if (gameMode === 'campaign' && cards[id]?.kind) return
+    if (deck.includes(id)) return
+    if (slot < 0 || slot > 7) return
+    const next = [...deck]
+    if (slot < next.length) next[slot] = id
+    else if (next.length < 8) next.push(id)
+    else return
+    setDeck(next)
+    setReplaceSlot(null)
+    try { localStorage.setItem(deckStorageKey, JSON.stringify(next)) } catch { /* In-memory deck remains usable. */ }
+  }
   function moveDeckSlot(from: number, to: number) {
     if (from === to || from < 0 || to < 0 || from >= deck.length || to >= deck.length) return
     const next = [...deck]
@@ -736,15 +762,16 @@ function App() {
        <button className="secondary multiplayer-entry" onClick={() => { setGameMode('arena'); setOnlineMode('matchmake'); setPage('deck') }}><Swords size={18} /> GEGNER SUCHEN</button>
        <div className={`multiplayer-status ${serverStatus}`} role="status"><i /> MULTIPLAYER-SERVER: {serverStatus === 'checking' ? 'WIRD GEPRÜFT' : serverStatus === 'online' ? 'ONLINE' : 'OFFLINE'}</div>
        <button className="secondary" onClick={() => { setGameMode('campaign'); setOnlineMode(null); setPage('deck') }}><Shield size={18} /> KAMPAGNE · CLUBHAUS VERTEIDIGEN</button>
+       <div className="campaign-progress-strip"><span>✦ STICKER <b>{stickers}</b></span><span>REKORD <b>WELLE {campaignRecord}</b></span></div>
        <div className="app-version">FRONTEND v{APP_VERSION}</div>
        <div className="menu-facts"><span><b>01</b> Karte auswählen</span><span><b>02</b> Hool platzieren</span><span><b>03</b> Clubhaus zerstören</span></div>
         <div className="menu-crest"><span>EST. 2026</span><strong>TW</strong><Swords size={70} /><b>TERRACE WARS</b><small>BLOCK GEGEN BLOCK.</small></div>
        <div className="menu-note">Kostenloses Browser-MVP · Training gegen KI · Eigene, fiktive Vereine</div>
        {tutorial && <div className="tutorial-card"><div className="eyebrow">KURZANLEITUNG</div><h2>Dein Derby in drei Zügen</h2><ol><li><b>Karte wählen</b><span>Wähle eine der vier Karten unten.</span></li><li><b>Links platzieren</b><span>Setze Truppen in deiner Hälfte ein; Zauber treffen das ganze Feld.</span></li><li><b>Clubhaus stürmen</b><span>Zerstöre erst die Kneipen und dann das gegnerische Clubhaus.</span></li></ol><button className="secondary" onClick={closeTutorial}>VERSTANDEN</button></div>}
      </section>}
-       {page === 'deck' && <section className="page deck-page"><div className="eyebrow">{gameMode === 'campaign' ? 'KAMPAGNE · ' : onlineMode ? 'MULTIPLAYER · ' : ''}DEINE FIRM · {deck.length}/8 KARTEN</div><h1>{onlineMode === 'join' ? 'Dem Derby beitreten.' : onlineMode === 'create' ? 'Ein Derby eröffnen.' : onlineMode === 'matchmake' ? 'Gegner finden.' : gameMode === 'campaign' ? 'Verteidigungsdeck zusammenstellen.' : 'Die Startelf? Dein Deck.'}</h1><p>Wähle genau acht Karten. In der Kampagne platzierst du Einheiten an festen Stationen und hältst die Wellen auf.</p><div className="deck-slots" aria-label="Deine acht Deckplätze">{Array.from({ length: 8 }, (_, slot) => { const id = deck[slot]; const card = id === undefined ? null : cards[id]; return <div className={`deck-slot ${card ? 'filled' : 'empty'} ${replaceSlot === slot ? 'replace-target' : ''}`} key={slot} draggable={!!card} onDragStart={() => { deckDragSlot.current = slot }} onDragOver={event => event.preventDefault()} onDrop={() => { if (deckDragSlot.current !== null) moveDeckSlot(deckDragSlot.current, slot); deckDragSlot.current = null }} onClick={() => card && setReplaceSlot(slot)} title={card ? 'Ziehen zum Sortieren · Klicken, um diese Karte zu ersetzen' : 'Leeren Deckplatz'}><span className="deck-slot-number">{String(slot + 1).padStart(2, '0')}</span>{card ? <><div className="deck-slot-art">{cardArt(card)}</div><b title={card.name}>{card.name}</b><button className="deck-slot-remove" onClick={event => { event.stopPropagation(); toggleDeck(id) }} aria-label={`${card.name} aus Deckplatz ${slot + 1} entfernen`}>×</button></> : <span className="deck-slot-plus">＋</span>}</div> })}</div><button className="primary deck-start-button" disabled={deck.length !== 8} onClick={start}>{onlineMode === 'join' ? 'DERBY BEITRETEN' : onlineMode === 'create' ? 'EINLADUNG ERSTELLEN' : onlineMode === 'matchmake' ? 'GEGNER SUCHEN' : gameMode === 'campaign' ? 'KAMPAGNE STARTEN' : 'MIT DIESEM DECK SPIELEN'} <Play size={18} /></button><div className="deck-selection-heading"><span>ALLE KARTEN</span><small>{replaceSlot !== null ? `Slot ${replaceSlot + 1} ersetzen · ` : ''}{deck.length}/8 ausgewählt · Klick zum Hinzufügen oder Entfernen</small></div><div className="collection">{cards.filter(card => !card.hidden && (gameMode !== 'campaign' || !card.kind)).map(card => { const id = cards.indexOf(card)
+       {page === 'deck' && <section className="page deck-page"><div className="deck-mode-overview"><button className={gameMode === 'arena' ? 'active' : ''} onClick={() => { setGameMode('arena'); setOnlineMode(null) }}><b>DERBY-DECK</b><small>{arenaDeck.map(id => cards[id]?.name).join(' · ')}</small></button><button className={gameMode === 'campaign' ? 'active' : ''} onClick={() => { setGameMode('campaign'); setOnlineMode(null) }}><b>KAMPAGNEN-DECK</b><small>{campaignDeck.map(id => cards[id]?.name).join(' · ')}</small></button></div><div className="eyebrow">{gameMode === 'campaign' ? 'KAMPAGNE · ' : onlineMode ? 'MULTIPLAYER · ' : ''}DEINE FIRM · {deck.length}/8 KARTEN</div><h1>{onlineMode === 'join' ? 'Dem Derby beitreten.' : onlineMode === 'create' ? 'Ein Derby eröffnen.' : onlineMode === 'matchmake' ? 'Gegner finden.' : gameMode === 'campaign' ? 'Verteidigungsdeck zusammenstellen.' : 'Die Startelf? Dein Deck.'}</h1><p>Wähle genau acht Karten. In der Kampagne platzierst du Einheiten an festen Stationen und hältst die Wellen auf.</p><div className="deck-slots" aria-label="Deine acht Deckplätze">{Array.from({ length: 8 }, (_, slot) => { const id = deck[slot]; const card = id === undefined ? null : cards[id]; return <div className={`deck-slot ${card ? 'filled' : 'empty'} ${replaceSlot === slot ? 'replace-target' : ''}`} key={slot} draggable={!!card} onDragStart={() => { deckDragSlot.current = slot }} onDragOver={event => event.preventDefault()} onDrop={() => { if (deckDragCard.current !== null) placeCardInSlot(deckDragCard.current, slot); else if (deckDragSlot.current !== null) moveDeckSlot(deckDragSlot.current, slot); deckDragCard.current = null; deckDragSlot.current = null }} onClick={() => card && setReplaceSlot(slot)} title={card ? 'Ziehen zum Sortieren · Klicken, um diese Karte zu ersetzen' : 'Leeren Deckplatz'}><span className="deck-slot-number">{String(slot + 1).padStart(2, '0')}</span>{card ? <><div className="deck-slot-art">{cardArt(card)}</div><b title={card.name}>{card.name}</b><button className="deck-slot-remove" onClick={event => { event.stopPropagation(); toggleDeck(id) }} aria-label={`${card.name} aus Deckplatz ${slot + 1} entfernen`}>×</button></> : <span className="deck-slot-plus">＋</span>}</div> })}</div><button className="primary deck-start-button" disabled={deck.length !== 8} onClick={start}>{onlineMode === 'join' ? 'DERBY BEITRETEN' : onlineMode === 'create' ? 'EINLADUNG ERSTELLEN' : onlineMode === 'matchmake' ? 'GEGNER SUCHEN' : gameMode === 'campaign' ? 'KAMPAGNE STARTEN' : 'MIT DIESEM DECK SPIELEN'} <Play size={18} /></button><div className="deck-selection-heading"><span>ALLE KARTEN</span><small>{replaceSlot !== null ? `Slot ${replaceSlot + 1} ersetzen · ` : ''}{deck.length}/8 ausgewählt · Klick zum Hinzufügen oder Entfernen</small></div><div className="collection">{cards.filter(card => !card.hidden && (gameMode !== 'campaign' || !card.kind)).map(card => { const id = cards.indexOf(card)
        const selectedInDeck = deck.indexOf(id)
-       return <article className={`collection-card ${rarityClass(card)} ${selectedInDeck >= 0 ? 'deck-selected' : ''}`} key={id}><span className="card-cost">{card.cost}</span>{cardArt(card)}<span className={`rarity ${rarityClass(card)}`}>{card.rarity} · {card.cost} Hype</span><h2>{card.name}</h2><p>{card.role}</p><div className="card-stats">{card.hp} HP · {card.damage} Schaden<br />{card.kind === 'building' ? 'Gebäude' : `${card.rate}s Angriff · Tempo ${card.speed}`}</div><button className="secondary" onClick={() => toggleDeck(id)}>{selectedInDeck >= 0 ? `${selectedInDeck + 1} · Entfernen` : '＋ Hinzufügen'}</button>{selectedInDeck >= 0 && <button className="secondary deck-reorder" onClick={() => reorder(selectedInDeck)}>Nach vorne ↑</button>}</article>
+       return <article className={`collection-card ${rarityClass(card)} ${selectedInDeck >= 0 ? 'deck-selected' : ''}`} key={id} draggable onDragStart={() => { deckDragCard.current = id }} onDragEnd={() => { deckDragCard.current = null }}><span className="card-cost">{card.cost}</span>{cardArt(card)}<span className={`rarity ${rarityClass(card)}`}>{card.rarity} · {card.cost} Hype</span><h2>{card.name}</h2><p>{card.role}</p><div className="card-stats">{card.hp} HP · {card.damage} Schaden<br />{card.kind === 'building' ? 'Gebäude' : `${card.rate}s Angriff · Tempo ${card.speed}`}</div><button className="secondary" onClick={() => toggleDeck(id)}>{selectedInDeck >= 0 ? `${selectedInDeck + 1} · Entfernen` : '＋ Hinzufügen'}</button>{selectedInDeck >= 0 && <button className="secondary deck-reorder" onClick={() => reorder(selectedInDeck)}>Nach vorne ↑</button>}</article>
         })}</div></section>}
       {page === 'arena' && <section className={`page arena-page ${game.result ? 'showing-result' : ''}`}>
           <div className="mobile-match-timer" aria-label={campaignMode ? 'Aktuelle Welle' : 'Verbleibende Spielzeit'}>{campaignMode ? `WELLE ${game.campaign?.wave ?? 1}` : formattedTime}</div>

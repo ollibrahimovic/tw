@@ -884,7 +884,8 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
     const siegeBuilding = u.siegeBuilding ? buildings.find(b => b.key === u.siegeBuilding && g.hp[b.key] > 0) : undefined
     const siegeStructure = u.siegeStructureId ? g.structures.find(s => s.id === u.siegeStructureId && s.hp > 0) : undefined
     const siegeLocked = !!siegeBuilding || !!siegeStructure || !!lockedGoal
-     const enemies = marchTank || siegeLocked ? [] : g.units.filter(v => v.side !== u.side && targetableUnit(v))
+     const enemies = marchTank || (siegeLocked && u.card.name !== 'Kutten-Garde')
+       ? [] : g.units.filter(v => v.side !== u.side && targetableUnit(v))
     const designatedTarget = u.targetId
       ? enemies.find(v => v.id === u.targetId)
       : undefined
@@ -896,7 +897,7 @@ export function tick(previous: Game, dt: number, random = Math.random): Game {
     let structureTarget = siegeStructure
     // Select exactly the nearest valid target once. The decision is locked
     // until that target is destroyed; new spawns cannot distract the unit.
-    if (!target && !structureTarget && !marchTank && !siegeLocked) {
+    if (!target && !structureTarget && !marchTank && (!siegeLocked || u.card.name === 'Kutten-Garde')) {
       const nearestEnemy = enemies
         .filter(v => distance(u, v) <= UNIT_PURSUIT_RADIUS)
         .sort((a, b) => distance(u, a) - distance(u, b))[0]
