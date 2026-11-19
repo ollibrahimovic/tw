@@ -324,7 +324,7 @@ test('rooftop bengalos deal damage on impact, splash enemies and respect cooldow
   assert.equal(g.units[2].hp, cards[0].hp, 'friendly units are unaffected')
   assert.equal(original.units[1].hp, cards[0].hp, 'prior simulation state is immutable')
   g.hp.redPubOne = 0
-  g = tick(g, 2)
+  for (let i = 0; i < 8; i++) g = tick(g, .05)
   assert.ok(g.flares.every(flare => flare.source !== 'redPubOne'), 'destroyed pub cannot throw')
   assert.ok(g.flares.some(flare => flare.source === 'redFortress'), 'activated gatling reaches attackers near the fallen pub')
 })
@@ -343,10 +343,10 @@ test('clubhouse gatling activates only after an own pub falls and rockets damage
     g = tick(g, .05)
     assert.equal(g.flares.length, 0, 'enemy pub falling does not activate this clubhouse')
     g.hp[`${side}PubTwo`] = 0
-    g = tick(g, .05)
+    for (let i = 0; i < 8; i++) g = tick(g, .05)
     assert.equal(g.flares[0].source, `${side}Fortress`)
     assert.equal(g.units[0].hp, 1000, 'rocket must travel before damage')
-    for (let i = 0; i < 18; i++) g = tick(g, .05)
+    for (let i = 0; i < 28; i++) g = tick(g, .05)
     assert.equal(g.units[0].hp, 970)
     assert.ok(g.flares.length > 0, 'gatling continues firing')
     g.hp[`${side}Fortress`] = 0

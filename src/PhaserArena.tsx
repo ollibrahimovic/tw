@@ -509,7 +509,7 @@ export function PhaserArena({ game, selectedCard, active, dragging = false, pers
            const shot = gameRef.current.flares.find(flare => flare.source === building.key)
            const firing = !!shot && shot.age + stateAge < .18
            const gatlingCharging = fortressArt && hp > 0 && hp < building.max &&
-             gameRef.current.buildingCooldown[building.key] <= .24
+             gameRef.current.buildingTelegraph[building.key]
            if (gatlingCharging) {
              const pulse = .5 + Math.sin(animationClock * .012) * .25
              const chargePoint = { x: at.x, y: at.y - 58 }

@@ -14,7 +14,7 @@ import './feedback.css'
 import './menu-overrides.css'
 import './replay.css'
 
-const APP_VERSION = '0.20'
+const APP_VERSION = '0.21'
 const loadingMessages = [
   'Fäuste werden bandagiert',
   'Zahnschutz wird angelegt',
