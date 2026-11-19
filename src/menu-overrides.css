@@ -265,6 +265,21 @@
   box-shadow: 0 0 9px #d76855aa;
 }
 
+.campaign-progress-strip {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 10px;
+  color: #aebd70;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.campaign-progress-strip b {
+  color: #f0c56b;
+}
+
 .app-version {
   margin-top: 7px;
   width: 100%;

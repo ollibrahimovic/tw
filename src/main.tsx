@@ -63,6 +63,14 @@ function loadCampaignUpgrades(): Record<string, number> {
     return {}
   }
 }
+function loadCampaignRecord(): number {
+  try {
+    const value = Number(localStorage.getItem('terrace-campaign-record') || 0)
+    return Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0
+  } catch {
+    return 0
+  }
+}
 
 function multiplayerHealthUrl() {
   const local = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -102,6 +110,7 @@ function App() {
   const [stickers, setStickers] = useState(loadStickers)
   const [stickerGain, setStickerGain] = useState(0)
   const [campaignUpgrades, setCampaignUpgrades] = useState(loadCampaignUpgrades)
+  const [campaignRecord, setCampaignRecord] = useState(loadCampaignRecord)
   const [showCampaignUpgrades, setShowCampaignUpgrades] = useState(false)
   const [replaceSlot, setReplaceSlot] = useState<number | null>(null)
   const preview = new URLSearchParams(window.location.search).get('preview')
@@ -376,6 +385,10 @@ function App() {
   }, [message])
   useEffect(() => {
     if (!campaignMode || !game.campaign) return
+    if (game.campaign.wave > campaignRecord) {
+      setCampaignRecord(game.campaign.wave)
+      try { localStorage.setItem('terrace-campaign-record', String(game.campaign.wave)) } catch { /* In-memory record remains usable. */ }
+    }
     const kills = game.campaign.kills
     const reward = kills - awardedCampaignKills.current
     if (reward <= 0) return
@@ -387,7 +400,7 @@ function App() {
     })
     setStickerGain(reward)
     window.setTimeout(() => setStickerGain(0), 1400)
-  }, [campaignMode, game.campaign?.kills])
+  }, [campaignMode, game.campaign?.kills, game.campaign?.wave, campaignRecord])
   useEffect(() => {
     if (countdown === null || !arenaReady) return
     if (countdown === 'go') {
@@ -749,6 +762,7 @@ function App() {
        <button className="secondary multiplayer-entry" onClick={() => { setGameMode('arena'); setOnlineMode('matchmake'); setPage('deck') }}><Swords size={18} /> GEGNER SUCHEN</button>
        <div className={`multiplayer-status ${serverStatus}`} role="status"><i /> MULTIPLAYER-SERVER: {serverStatus === 'checking' ? 'WIRD GEPRÜFT' : serverStatus === 'online' ? 'ONLINE' : 'OFFLINE'}</div>
        <button className="secondary" onClick={() => { setGameMode('campaign'); setOnlineMode(null); setPage('deck') }}><Shield size={18} /> KAMPAGNE · CLUBHAUS VERTEIDIGEN</button>
+       <div className="campaign-progress-strip"><span>✦ STICKER <b>{stickers}</b></span><span>REKORD <b>WELLE {campaignRecord}</b></span></div>
        <div className="app-version">FRONTEND v{APP_VERSION}</div>
        <div className="menu-facts"><span><b>01</b> Karte auswählen</span><span><b>02</b> Hool platzieren</span><span><b>03</b> Clubhaus zerstören</span></div>
         <div className="menu-crest"><span>EST. 2026</span><strong>TW</strong><Swords size={70} /><b>TERRACE WARS</b><small>BLOCK GEGEN BLOCK.</small></div>
