@@ -42,6 +42,18 @@ function loadStickers(): number {
     return 0
   }
 }
+function loadCampaignDeck(): number[] {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem('terrace-campaign-deck') || 'null')
+    if (Array.isArray(value)) {
+      const valid = [...new Set(value.filter(v =>
+        Number.isInteger(v) && v >= 0 && v < cards.length && !cards[v as number].hidden && !cards[v as number].kind,
+      ) as number[])]
+      if (valid.length >= 8) return valid.slice(0, 8)
+    }
+  } catch { /* Default campaign deck when storage is unavailable. */ }
+  return cards.filter(card => !card.kind && !card.hidden).slice(0, 8).map(card => cards.indexOf(card))
+}
 function loadCampaignUpgrades(): Record<string, number> {
   try {
     const value: unknown = JSON.parse(localStorage.getItem('terrace-campaign-upgrades') || '{}')
@@ -85,7 +97,8 @@ function checkMultiplayerSocket(signal: AbortSignal) {
 }
 
 function App() {
-  const [deck, setDeck] = useState(loadDeck)
+  const [arenaDeck, setArenaDeck] = useState(loadDeck)
+  const [campaignDeck, setCampaignDeck] = useState(loadCampaignDeck)
   const [stickers, setStickers] = useState(loadStickers)
   const [stickerGain, setStickerGain] = useState(0)
   const [campaignUpgrades, setCampaignUpgrades] = useState(loadCampaignUpgrades)
@@ -94,7 +107,7 @@ function App() {
   const preview = new URLSearchParams(window.location.search).get('preview')
   const initialMatch = new URLSearchParams(window.location.search).get('match')
   const [game, setGame] = useState(() => {
-    const initial = newGame(deck)
+    const initial = newGame(arenaDeck)
     if (preview === 'win') initial.result = 'DERBYSIEG!'
     if (preview === 'draw') initial.result = 'UNENTSCHIEDEN'
     if (preview === 'loss') initial.result = 'NIEDERLAGE'
@@ -102,6 +115,12 @@ function App() {
   })
   const [page, setPage] = useState<'menu' | 'arena' | 'deck'>(preview ? 'arena' : initialMatch ? 'deck' : 'menu')
   const [gameMode, setGameMode] = useState<'arena' | 'campaign'>('arena')
+  const deck = gameMode === 'campaign' ? campaignDeck : arenaDeck
+  const deckStorageKey = gameMode === 'campaign' ? 'terrace-campaign-deck' : 'terrace-deck'
+  const setDeck = (next: number[]) => {
+    if (gameMode === 'campaign') setCampaignDeck(next)
+    else setArenaDeck(next)
+  }
   const [running, setRunning] = useState(false)
   const [gameSpeed, setGameSpeed] = useState<1 | 2 | 3 | 4 | 5>(1)
   const [countdown, setCountdown] = useState<number | 'go' | null>(null)
@@ -670,22 +689,26 @@ function App() {
     const target = index === 0 ? 7 : index - 1
     ;[next[index], next[target]] = [next[target], next[index]]
     setDeck(next)
-    try { localStorage.setItem('terrace-deck', JSON.stringify(next)) } catch { /* In-memory deck remains usable. */ }
+    try { localStorage.setItem(deckStorageKey, JSON.stringify(next)) } catch { /* In-memory deck remains usable. */ }
   }
   function toggleDeck(id: number) {
+    if (gameMode === 'campaign' && cards[id]?.kind) {
+      setMessage('Zauber und Gebäude gehören nicht ins Kampagnen-Deck.')
+      return
+    }
     const next = replaceSlot !== null && !deck.includes(id)
       ? deck.map((cardId, index) => index === replaceSlot ? id : cardId)
       : deck.includes(id) ? deck.filter(cardId => cardId !== id) : deck.length < 8 ? [...deck, id] : deck
     setDeck(next)
     setReplaceSlot(null)
-    try { localStorage.setItem('terrace-deck', JSON.stringify(next)) } catch { /* In-memory deck remains usable. */ }
+    try { localStorage.setItem(deckStorageKey, JSON.stringify(next)) } catch { /* In-memory deck remains usable. */ }
   }
   function moveDeckSlot(from: number, to: number) {
     if (from === to || from < 0 || to < 0 || from >= deck.length || to >= deck.length) return
     const next = [...deck]
     ;[next[from], next[to]] = [next[to], next[from]]
     setDeck(next)
-    try { localStorage.setItem('terrace-deck', JSON.stringify(next)) } catch { /* In-memory deck remains usable. */ }
+    try { localStorage.setItem(deckStorageKey, JSON.stringify(next)) } catch { /* In-memory deck remains usable. */ }
   }
   function rarityClass(card: Card) {
     return `rarity-${card.rarity.toLowerCase()}`
@@ -719,7 +742,7 @@ function App() {
        <div className="menu-note">Kostenloses Browser-MVP · Training gegen KI · Eigene, fiktive Vereine</div>
        {tutorial && <div className="tutorial-card"><div className="eyebrow">KURZANLEITUNG</div><h2>Dein Derby in drei Zügen</h2><ol><li><b>Karte wählen</b><span>Wähle eine der vier Karten unten.</span></li><li><b>Links platzieren</b><span>Setze Truppen in deiner Hälfte ein; Zauber treffen das ganze Feld.</span></li><li><b>Clubhaus stürmen</b><span>Zerstöre erst die Kneipen und dann das gegnerische Clubhaus.</span></li></ol><button className="secondary" onClick={closeTutorial}>VERSTANDEN</button></div>}
      </section>}
-       {page === 'deck' && <section className="page deck-page"><div className="eyebrow">{gameMode === 'campaign' ? 'KAMPAGNE · ' : onlineMode ? 'MULTIPLAYER · ' : ''}DEINE FIRM · {deck.length}/8 KARTEN</div><h1>{onlineMode === 'join' ? 'Dem Derby beitreten.' : onlineMode === 'create' ? 'Ein Derby eröffnen.' : onlineMode === 'matchmake' ? 'Gegner finden.' : gameMode === 'campaign' ? 'Verteidigungsdeck zusammenstellen.' : 'Die Startelf? Dein Deck.'}</h1><p>Wähle genau acht Karten. In der Kampagne platzierst du Einheiten an festen Stationen und hältst die Wellen auf.</p><div className="deck-slots" aria-label="Deine acht Deckplätze">{Array.from({ length: 8 }, (_, slot) => { const id = deck[slot]; const card = id === undefined ? null : cards[id]; return <div className={`deck-slot ${card ? 'filled' : 'empty'} ${replaceSlot === slot ? 'replace-target' : ''}`} key={slot} draggable={!!card} onDragStart={() => { deckDragSlot.current = slot }} onDragOver={event => event.preventDefault()} onDrop={() => { if (deckDragSlot.current !== null) moveDeckSlot(deckDragSlot.current, slot); deckDragSlot.current = null }} onClick={() => card && setReplaceSlot(slot)} title={card ? 'Ziehen zum Sortieren · Klicken, um diese Karte zu ersetzen' : 'Leeren Deckplatz'}><span className="deck-slot-number">{String(slot + 1).padStart(2, '0')}</span>{card ? <><div className="deck-slot-art">{cardArt(card)}</div><b title={card.name}>{card.name}</b><button className="deck-slot-remove" onClick={event => { event.stopPropagation(); toggleDeck(id) }} aria-label={`${card.name} aus Deckplatz ${slot + 1} entfernen`}>×</button></> : <span className="deck-slot-plus">＋</span>}</div> })}</div><button className="primary deck-start-button" disabled={deck.length !== 8} onClick={start}>{onlineMode === 'join' ? 'DERBY BEITRETEN' : onlineMode === 'create' ? 'EINLADUNG ERSTELLEN' : onlineMode === 'matchmake' ? 'GEGNER SUCHEN' : gameMode === 'campaign' ? 'KAMPAGNE STARTEN' : 'MIT DIESEM DECK SPIELEN'} <Play size={18} /></button><div className="deck-selection-heading"><span>ALLE KARTEN</span><small>{replaceSlot !== null ? `Slot ${replaceSlot + 1} ersetzen · ` : ''}{deck.length}/8 ausgewählt · Klick zum Hinzufügen oder Entfernen</small></div><div className="collection">{cards.filter(card => !card.hidden).map(card => { const id = cards.indexOf(card)
+       {page === 'deck' && <section className="page deck-page"><div className="eyebrow">{gameMode === 'campaign' ? 'KAMPAGNE · ' : onlineMode ? 'MULTIPLAYER · ' : ''}DEINE FIRM · {deck.length}/8 KARTEN</div><h1>{onlineMode === 'join' ? 'Dem Derby beitreten.' : onlineMode === 'create' ? 'Ein Derby eröffnen.' : onlineMode === 'matchmake' ? 'Gegner finden.' : gameMode === 'campaign' ? 'Verteidigungsdeck zusammenstellen.' : 'Die Startelf? Dein Deck.'}</h1><p>Wähle genau acht Karten. In der Kampagne platzierst du Einheiten an festen Stationen und hältst die Wellen auf.</p><div className="deck-slots" aria-label="Deine acht Deckplätze">{Array.from({ length: 8 }, (_, slot) => { const id = deck[slot]; const card = id === undefined ? null : cards[id]; return <div className={`deck-slot ${card ? 'filled' : 'empty'} ${replaceSlot === slot ? 'replace-target' : ''}`} key={slot} draggable={!!card} onDragStart={() => { deckDragSlot.current = slot }} onDragOver={event => event.preventDefault()} onDrop={() => { if (deckDragSlot.current !== null) moveDeckSlot(deckDragSlot.current, slot); deckDragSlot.current = null }} onClick={() => card && setReplaceSlot(slot)} title={card ? 'Ziehen zum Sortieren · Klicken, um diese Karte zu ersetzen' : 'Leeren Deckplatz'}><span className="deck-slot-number">{String(slot + 1).padStart(2, '0')}</span>{card ? <><div className="deck-slot-art">{cardArt(card)}</div><b title={card.name}>{card.name}</b><button className="deck-slot-remove" onClick={event => { event.stopPropagation(); toggleDeck(id) }} aria-label={`${card.name} aus Deckplatz ${slot + 1} entfernen`}>×</button></> : <span className="deck-slot-plus">＋</span>}</div> })}</div><button className="primary deck-start-button" disabled={deck.length !== 8} onClick={start}>{onlineMode === 'join' ? 'DERBY BEITRETEN' : onlineMode === 'create' ? 'EINLADUNG ERSTELLEN' : onlineMode === 'matchmake' ? 'GEGNER SUCHEN' : gameMode === 'campaign' ? 'KAMPAGNE STARTEN' : 'MIT DIESEM DECK SPIELEN'} <Play size={18} /></button><div className="deck-selection-heading"><span>ALLE KARTEN</span><small>{replaceSlot !== null ? `Slot ${replaceSlot + 1} ersetzen · ` : ''}{deck.length}/8 ausgewählt · Klick zum Hinzufügen oder Entfernen</small></div><div className="collection">{cards.filter(card => !card.hidden && (gameMode !== 'campaign' || !card.kind)).map(card => { const id = cards.indexOf(card)
        const selectedInDeck = deck.indexOf(id)
        return <article className={`collection-card ${rarityClass(card)} ${selectedInDeck >= 0 ? 'deck-selected' : ''}`} key={id}><span className="card-cost">{card.cost}</span>{cardArt(card)}<span className={`rarity ${rarityClass(card)}`}>{card.rarity} · {card.cost} Hype</span><h2>{card.name}</h2><p>{card.role}</p><div className="card-stats">{card.hp} HP · {card.damage} Schaden<br />{card.kind === 'building' ? 'Gebäude' : `${card.rate}s Angriff · Tempo ${card.speed}`}</div><button className="secondary" onClick={() => toggleDeck(id)}>{selectedInDeck >= 0 ? `${selectedInDeck + 1} · Entfernen` : '＋ Hinzufügen'}</button>{selectedInDeck >= 0 && <button className="secondary deck-reorder" onClick={() => reorder(selectedInDeck)}>Nach vorne ↑</button>}</article>
         })}</div></section>}
